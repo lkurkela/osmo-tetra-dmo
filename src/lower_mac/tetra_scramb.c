@@ -20,6 +20,7 @@
  *
  */
 
+#include <stdio.h>
 #include <stdint.h>
 #include <lower_mac/tetra_scramb.h>
 
@@ -93,6 +94,19 @@ uint32_t tetra_scramb_get_init(uint16_t mcc, uint16_t mnc, uint8_t colour)
 	colour &= 0x3f;
 
 	scramb_init = colour | (mnc << 6) | (mcc << 20);
+	scramb_init = (scramb_init << 2) | SCRAMB_INIT;
+
+	return scramb_init;
+}
+
+/* DMO Scrambling (396-3 8.2.4) */
+uint32_t tetra_dmo_scramb_get_init(uint32_t mni, uint32_t srcaddr)
+{
+	uint32_t scramb_init;
+	mni &= 0x3f;
+	srcaddr &= 0xffffff;
+
+	scramb_init = (mni) | (srcaddr << 6); // = colour code
 	scramb_init = (scramb_init << 2) | SCRAMB_INIT;
 
 	return scramb_init;

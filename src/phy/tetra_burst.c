@@ -53,6 +53,11 @@
 #define DMO_SB_BLK1_BITS	(60*DQPSK4_BITS_PER_SYM)
 #define DMO_SB_BLK2_BITS	(108*DQPSK4_BITS_PER_SYM)
 
+#define DMO_DNB_BLK1_OFFSET ((6+1)*DQPSK4_BITS_PER_SYM)
+#define DMO_DNB_BLK2_OFFSET	((6+1+108+11)*DQPSK4_BITS_PER_SYM)
+#define DMO_DNB_BLK_BITS	(108*DQPSK4_BITS_PER_SYM)
+
+
 /* 9.4.4.3.1 Frequency Correction Field */
 static const uint8_t f_bits[80] = {
 	/* f1 .. f8 = 1 */
@@ -387,37 +392,29 @@ void tetra_burst_rx_cb(const uint8_t *burst, unsigned int len, enum tetra_train_
 
 void tetra_burst_dmo_rx_cb(const uint8_t *burst, unsigned int len, enum tetra_train_seq type, void *priv)
 {
-	uint8_t bbk_buf[NDB_BBK_BITS];
-	uint8_t ndbf_buf[2*NDB_BLK_BITS];
+	uint8_t dnbf_buf[2*DMO_DNB_BLK_BITS];
 
 	switch (type) {
 	case TETRA_TRAIN_SYNC:
 		/* Split SB1, SB2 Block */
 		/* send parts of the burst via DP-SAP into lower MAC */
-		dp_sap_udata_ind(DPSAP_T_DSB1, burst+DMO_SB_BLK1_OFFSET, DMO_SB_BLK1_BITS, priv);
-		dp_sap_udata_ind(DPSAP_T_DSB2, burst+DMO_SB_BLK2_OFFSET, DMO_SB_BLK2_BITS, priv);
+		dp_sap_udata_ind(DPSAP_T_SCH_S, burst+DMO_SB_BLK1_OFFSET, DMO_SB_BLK1_BITS, priv);
+		dp_sap_udata_ind(DPSAP_T_SCH_H, burst+DMO_SB_BLK2_OFFSET, DMO_SB_BLK2_BITS, priv);
 		break;
 	case TETRA_TRAIN_NORM_2:
-		/* re-combine the broadcast block */
-		memcpy(bbk_buf, burst+NDB_BBK1_OFFSET, NDB_BBK1_BITS);
-		memcpy(bbk_buf+NDB_BBK1_BITS, burst+NDB_BBK2_OFFSET, NDB_BBK2_BITS);
-		/* send three parts of the burst via TP-SAP into lower MAC */
-		tp_sap_udata_ind(TPSAP_T_BBK, bbk_buf, NDB_BBK_BITS, priv);
-		tp_sap_udata_ind(TPSAP_T_NDB, burst+NDB_BLK1_OFFSET, NDB_BLK_BITS, priv);
-		tp_sap_udata_ind(TPSAP_T_NDB, burst+NDB_BLK2_OFFSET, NDB_BLK_BITS, priv);
+		/* send two parts of the burst via DP-SAP into lower MAC (396-2 9.4.3.3.2) */
+		dp_sap_udata_ind(DPSAP_T_DSB1, burst+DMO_DNB_BLK1_OFFSET, DMO_DNB_BLK_BITS, priv);
+		dp_sap_udata_ind(DPSAP_T_DSB1, burst+DMO_DNB_BLK2_OFFSET, DMO_DNB_BLK_BITS, priv);
 		break;
 	case TETRA_TRAIN_NORM_1:
-		/* re-combine the broadcast block */
-		memcpy(bbk_buf, burst+NDB_BBK1_OFFSET, NDB_BBK1_BITS);
-		memcpy(bbk_buf+NDB_BBK1_BITS, burst+NDB_BBK2_OFFSET, NDB_BBK2_BITS);
-		/* re-combine the two parts */
-		memcpy(ndbf_buf, burst+NDB_BLK1_OFFSET, NDB_BLK_BITS);
-		memcpy(ndbf_buf+NDB_BLK_BITS, burst+NDB_BLK2_OFFSET, NDB_BLK_BITS);
-		/* send two parts of the burst via TP-SAP into lower MAC */
-		tp_sap_udata_ind(TPSAP_T_BBK, bbk_buf, NDB_BBK_BITS, priv);
-		tp_sap_udata_ind(TPSAP_T_SCH_F, ndbf_buf, 2*NDB_BLK_BITS, priv);
+		/* re-combine the two block parts */
+		memcpy(dnbf_buf, burst+DMO_DNB_BLK1_OFFSET, DMO_DNB_BLK_BITS);
+		memcpy(dnbf_buf+DMO_DNB_BLK_BITS, burst+DMO_DNB_BLK2_OFFSET, DMO_DNB_BLK_BITS);
+		/* send two parts of the burst via DP-SAP into lower MAC */
+		dp_sap_udata_ind(DPSAP_T_SCH_F, dnbf_buf, 2*DMO_DNB_BLK_BITS, priv);
 		break;
 	default:
+		printf("#### hello from burst with to-do training sequence\n");
 		// did we forgot something?
 		break;
 	}

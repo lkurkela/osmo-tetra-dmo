@@ -14,6 +14,7 @@
 #define SCRAMB_INIT	3
 
 uint32_t tetra_scramb_get_init(uint16_t mcc, uint16_t mnc, uint8_t colour);
+uint32_t tetra_dmo_scramb_get_init(uint32_t mni, uint32_t srcaddr);
 
 int tetra_scramb_get_bits(uint32_t lfsr_init, uint8_t *out, int len);
 

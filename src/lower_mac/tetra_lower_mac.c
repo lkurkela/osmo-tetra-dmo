@@ -97,22 +97,39 @@ static const struct tetra_blk_param tetra_blk_param[] = {
 		.type2_bits	= 30,
 		.type1_bits	= 14,
 	},
-	[DPSAP_T_DSB1] = {
-		.name		= "SB1",
+	[DPSAP_T_SCH_S] = {
+		.name		= "SCH/S",
 		.type345_bits 	= 120,
 		.type2_bits	= 80,
 		.type1_bits	= 60,
 		.interleave_a	= 11,
 		.have_crc16	= 1,
 	},
-	[DPSAP_T_DSB2] = {
-		.name		= "SB2",
+	[DPSAP_T_SCH_H] = {
+		.name		= "SCH/H",
 		.type345_bits	= 216,
 		.type2_bits	= 144,
 		.type1_bits	= 124,
 		.interleave_a	= 101,
 		.have_crc16	= 1,
 	},
+	[DPSAP_T_SCH_F] = {
+		.name		= "SCH/F",
+		.type345_bits	= 432,
+		.type2_bits	= 288,
+		.type1_bits	= 268,
+		.interleave_a	= 103,
+		.have_crc16	= 1,
+	},
+	[DPSAP_T_STCH] = {
+		.name		= "STCH",
+		.type345_bits	= 216,
+		.type2_bits	= 144,
+		.type1_bits	= 124,
+		.interleave_a	= 101,
+		.have_crc16	= 1,
+	},
+
 };
 
 struct tetra_cell_data {
@@ -122,9 +139,64 @@ struct tetra_cell_data {
 	struct tetra_tdma_time time;
 
 	uint32_t scramb_init;
+	///
+	uint8_t communication_type;
+	uint8_t masterslave_link_flag;
+	uint8_t gateway_message_flag;
+	uint8_t ab_channel_usage;
+	uint8_t encryption_state;
+	uint16_t repgw_address;
+	uint8_t fillbit_indication;
+	uint8_t fragmentation_flag;
+	uint8_t number_of_SCH_F_slots;
+	uint8_t frame_countdown;
+	uint8_t dest_address_type;
+	uint32_t dest_address;
+	uint8_t src_address_type;
+	uint32_t src_address;
+	uint32_t mni;
+};
+static struct tetra_cell_data _tcd, *tcd = &_tcd;
+
+enum DMO_SYNC_PDU_TYPE {
+	DMAC_SYNC,
+	DPRES_SYNC
 };
 
-static struct tetra_cell_data _tcd, *tcd = &_tcd;
+enum DMO_MESSAGE_TYPE {
+	DM_RESERVED,
+	DM_SDS_OCCUPIED,
+	DM_TIMING_REQ,
+	DM_TIMING_ACK,
+	RESERVED_4,
+	RESERVED_5,
+	RESERVED_6,
+	RESERVED_7,
+	DM_SETUP,
+	DM_SETUP_PRES,
+	DM_CONNECT,
+	DM_DISCONNECT,
+	DM_CONNECT_ACK,
+	DM_OCCUPIED,
+	DM_RELEASE,
+	DM_TX_CEASED,
+	DM_TX_REQ,
+	DM_TX_ACCEPT,
+	DM_PREEMPT,
+	DM_PRE_ACCEPT,
+	DM_REJECT,
+	DM_INFO,
+	DM_SDS_UDATA,
+	DM_SDS_DATA,
+	DM_SDS_ACK,
+	GW_SPECIFIC_MESSAGE,
+	RESERVED_26,
+	RESERVED_27,
+	RESERVED_28,
+	RESERVED_29,
+	PROPRIETARY_30,
+	PROPRIETARY_31
+};
 
 int is_bsch(struct tetra_tdma_time *tm)
 {
@@ -190,7 +262,7 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 
 	/* De-scramble, pay special attention to SB1 pre-defined scrambling */
 	memcpy(type4, bits, tbp->type345_bits);
-	if (type == DPSAP_T_DSB1) {
+	if (type == DPSAP_T_SCH_S) {
 		tetra_scramb_bits(SCRAMB_INIT, type4, tbp->type345_bits);
 		tup->colour_code = SCRAMB_INIT;
 	} else {
@@ -239,40 +311,105 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 	memcpy(msg->l1h, type2, tbp->type1_bits);
 
 	switch (type) {
-	case DPSAP_T_DSB1:
-		printf("DMAC-SYNC SCH/S PDU TYPE %s(0x%02x) ", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
-		/* obtain information from SYNC PDU */
+	case DPSAP_T_SCH_S:
+		printf("SYNC SCH/S PDU TYPE %s(0x%02x) ", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
+		printf("System code %s(0x%02x) \n", osmo_ubit_dump(type2+0, 4), bits_to_uint(type2+0, 4));
+		/* obtain information from SYNC PDU (396-3 - 9.1.1 Table 21) */
 		if (tup->crc_ok) {
-			tcd->colour_code = bits_to_uint(type2+4, 6);
-			tcd->time.tn = bits_to_uint(type2+10, 2);
-			tcd->time.fn = bits_to_uint(type2+12, 5);
-			tcd->time.mn = bits_to_uint(type2+17, 6);
-			tcd->mcc = bits_to_uint(type2+31, 10);
-			tcd->mnc = bits_to_uint(type2+41, 14);
+			uint32_t sync_pdu_type = bits_to_uint(type2+4, 2);
+			switch (sync_pdu_type) {
+			case DMAC_SYNC:
+				tcd->communication_type = bits_to_uint(type2+6, 2);
+				tcd->masterslave_link_flag = bits_to_uint(type2+8, 1);
+				tcd->gateway_message_flag = bits_to_uint(type2+9, 1);
+				tcd->ab_channel_usage = bits_to_uint(type2+10, 2);
+				tcd->time.tn = bits_to_uint(type2+12, 2);
+				tcd->time.fn = bits_to_uint(type2+14, 5);
+				tcd->encryption_state = bits_to_uint(type2+19, 2);
+
+				printf("C %d, M/S %d, GW %d, AB %d, TN %d FN %d ENC %d ", 
+					tcd->communication_type, tcd->masterslave_link_flag, tcd->gateway_message_flag, tcd->ab_channel_usage, 
+					tcd->time.tn, tcd->time.fn, tcd->encryption_state);
+				break;
+
+			case DPRES_SYNC:
+				break;
+			}
+
 			/* compute the scrambling code for the current cell */
 			tcd->scramb_init = tetra_scramb_get_init(tcd->mcc, tcd->mnc, tcd->colour_code);
+
 		}
 		/* update the PHY layer time */
 		memcpy(&t_phy_state.time, &tcd->time, sizeof(t_phy_state.time));
-		tup->lchan = TETRA_LC_BSCH;
+		tup->lchan = TETRA_LC_SCH_S;
 		break;
-	case DPSAP_T_DSB2:
-		printf("DMAC-SYNC SCH/H TYPE %s(0x%02x) ", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
+	case DPSAP_T_SCH_H:
+		printf("SYNC SCH/H TYPE %s(0x%02x) \n", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
+		/* obtain information from SYNC PDU (396-3 - 9.1.1 Table 22) */
+		if (tup->crc_ok) {
+			tcd->repgw_address = bits_to_uint(type2, 10);
+			tcd->fillbit_indication = bits_to_uint(type2+10, 1);
+			tcd->fragmentation_flag = bits_to_uint(type2+11, 1);
 
-	case TPSAP_T_NDB:
-		/* FIXME: do something */
+			int pointer = 12;
+			if (tcd->fragmentation_flag) {
+				tcd->number_of_SCH_F_slots = bits_to_uint(type2+pointer, 4);
+				pointer = pointer + 4;
+			}
+			tcd->frame_countdown = bits_to_uint(type2+pointer, 2);
+			pointer = pointer + 2;
+			tcd->dest_address_type = bits_to_uint(type2+pointer, 2);
+			pointer = pointer + 2;
+			if (tcd->dest_address_type != 2) {
+				tcd->dest_address = bits_to_uint(type2+pointer, 24);
+				pointer = pointer + 24;
+			}
+
+			tcd->src_address_type = bits_to_uint(type2+pointer, 2);
+			pointer = pointer + 2;
+			if (tcd->src_address_type != 2) {
+				tcd->src_address = bits_to_uint(type2+pointer, 24);
+				pointer = pointer + 24;
+			}
+
+			uint16_t mcc, mnc;
+
+			if (tcd->communication_type < 2) {
+				tcd->mni = bits_to_uint(type2+pointer, 24);
+				mcc = bits_to_uint(type2+pointer, 10);
+				mnc = bits_to_uint(type2+pointer+10, 14);
+				pointer = pointer + 24;
+			}
+
+			uint8_t message_type = bits_to_uint(type2+pointer, 5);
+			pointer = pointer + 5;
+
+			printf("REPGW %d, Fill %d, Frag %d, num %d, FN cnt %d, dst-type %d, dst-addr %d, src-type %d, src %d, mni %d (MCC %d, MNC %d), msg-type %d",
+				tcd->repgw_address, tcd->fillbit_indication, tcd->fragmentation_flag, tcd-> number_of_SCH_F_slots, tcd->frame_countdown,
+				tcd->dest_address_type, tcd->dest_address, tcd->src_address_type, tcd->src_address, tcd->mni, mcc, mnc,  message_type);
+	
+		}
+		tup->lchan = TETRA_LC_SCH_H;
 		break;
-	case TPSAP_T_BBK:
-		tup->lchan = TETRA_LC_AACH;
+	case DPSAP_T_TCH:
+		printf("TCH TYPE %s(0x%02x) \n", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
+		tup->lchan = TETRA_LC_TCH;
 		break;
-	case TPSAP_T_SCH_F:
+	case DPSAP_T_SCH_F:
+		printf("SCH/F TYPE %s(0x%02x) \n", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
 		tup->lchan = TETRA_LC_SCH_F;
 		break;
+	case DPSAP_T_STCH:
+		printf("STCH TYPE %s(0x%02x) \n", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
+		tup->lchan = TETRA_LC_STCH;
+		break;
 	default:
+		printf("#### Here be dragon with SAP type %d\n", type);
 		/* FIXME: do something */
 		break;
 	}
-	/* send Rx time along with the TMV-UNITDATA.ind primitive */
+	/* send Rx time along with the DMV-UNITDATA.ind primitive */
 	memcpy(&tup->tdma_time, &tcd->time, sizeof(tup->tdma_time));
 
 	upper_mac_prim_recv(&ttp->oph, tms);

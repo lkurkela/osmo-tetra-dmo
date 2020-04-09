@@ -36,6 +36,9 @@ enum tetra_log_chan {
 	TETRA_LC_BSCH,
 	TETRA_LC_BNCH,
 
+	TETRA_LC_SCH_S,
+	TETRA_LC_SCH_H
+
 	/* FIXME: QAM */
 };
 

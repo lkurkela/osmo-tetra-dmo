@@ -17,8 +17,11 @@ enum dp_sap_data_type {
 	DPSAP_T_DSB2,
 	DPSAP_T_NDB,
 	DPSAP_T_DLB,
-	DPSAP_T_SCH_HU,
 	DPSAP_T_SCH_F,
+	DPSAP_T_SCH_S,
+	DPSAP_T_SCH_H,
+	DPSAP_T_STCH,
+	DPSAP_T_TCH
 };
 
 

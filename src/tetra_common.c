@@ -104,6 +104,8 @@ static const struct value_string tetra_sap_names[] = {
 static const struct value_string tetra_lchan_names[] = {
 	{ TETRA_LC_UNKNOWN,	"UNKNOWN" },
 	{ TETRA_LC_SCH_F,	"SCH/F" },
+	{ TETRA_LC_SCH_H,	"SCH/H" },
+	{ TETRA_LC_SCH_S,	"SCH/S" },
 	{ TETRA_LC_SCH_HD,	"SCH/HD" },
 	{ TETRA_LC_SCH_HU,	"SCH/HU" },
 	{ TETRA_LC_STCH,	"STCH" },
