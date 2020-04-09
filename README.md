@@ -1,3 +1,16 @@
+OSMO-TETRA-DMO
+==============
+
+This is highly experimental, unsupported, DMO-appended fork of osmo-tetra library.
+
+It is expected to use 
+[suo](https://github.com/tejeez/suo)
+as communication medium.
+
+
+
+Original osmo-tetra README.md:
+
 TETRA MAC/PHY layer experimentation code
 ========================================
 

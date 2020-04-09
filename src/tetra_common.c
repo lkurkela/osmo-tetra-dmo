@@ -96,6 +96,8 @@ static const struct value_string tetra_sap_names[] = {
 	{ TETRA_SAP_TMA,	"TMA-SAP" },
 	{ TETRA_SAP_TMB,	"TMB-SAP" },
 	{ TETRA_SAP_TMD,	"TMD-SAP" },
+	{ TETRA_SAP_DP,		"DP-SAP"},
+	{ TETRA_SAP_DMV,	"DMV-SAP"},
 	{ 0, NULL }
 };
 

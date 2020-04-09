@@ -34,6 +34,7 @@
 struct tetra_phy_state t_phy_state;
 
 void tetra_burst_rx_cb(const uint8_t *burst, unsigned int len, enum tetra_train_seq type, void *priv);
+void tetra_burst_dmo_rx_cb(const uint8_t *burst, unsigned int len, enum tetra_train_seq type, void *priv);
 
 static void make_bitbuf_space(struct tetra_rx_state *trs, unsigned int len)
 {
@@ -55,6 +56,7 @@ int tetra_burst_sync_in(struct tetra_rx_state *trs, uint8_t *bits, unsigned int 
 {
 	int rc;
 	unsigned int train_seq_offs;
+	struct tetra_mac_state *tms = trs->burst_cb_priv;
 
 	DEBUGP("burst_sync_in: %u bits, state %u\n", len, trs->state);
 
@@ -121,19 +123,27 @@ int tetra_burst_sync_in(struct tetra_rx_state *trs, uint8_t *bits, unsigned int 
 			switch (rc) {
 			case TETRA_TRAIN_SYNC:
 				if (train_seq_offs == 214)
-					tetra_burst_rx_cb(trs->bitbuf, TETRA_BITS_PER_TS, rc, trs->burst_cb_priv);
+					if (tms->infra_mode == TETRA_INFRA_DMO) {
+						tetra_burst_dmo_rx_cb(trs->bitbuf, TETRA_BITS_PER_TS, rc, trs->burst_cb_priv);
+					} else {
+						tetra_burst_rx_cb(trs->bitbuf, TETRA_BITS_PER_TS, rc, trs->burst_cb_priv);
+					}
 				else {
-					fprintf(stderr, "#### SYNC burst at offset %u?!?\n", train_seq_offs);
+					fprintf(stderr, "#### TRAIN_SYNC #### SYNC burst at offset %u?!?\n", train_seq_offs);
 					trs->state = RX_S_UNLOCKED;
 				}
 				break;
 			case TETRA_TRAIN_NORM_1:
 			case TETRA_TRAIN_NORM_2:
 			case TETRA_TRAIN_NORM_3:
-				if (train_seq_offs == 244)
+				/* DMO 396-2 - 9.4.3.2.1 DM Normal Burst (DNB)*/
+				if (train_seq_offs == 230 && tms->infra_mode == TETRA_INFRA_DMO) {
+					tetra_burst_dmo_rx_cb(trs->bitbuf, TETRA_BITS_PER_TS, rc, trs->burst_cb_priv);
+				}
+				else if (train_seq_offs == 244)
 					tetra_burst_rx_cb(trs->bitbuf, TETRA_BITS_PER_TS, rc, trs->burst_cb_priv);
 				else
-					fprintf(stderr, "#### SYNC burst at offset %u?!?\n", train_seq_offs);
+					fprintf(stderr, "### TRAIN_NORM #### SYNC burst at offset %u?!?\n", train_seq_offs);
 				break;
 			default:
 				fprintf(stderr, "#### could not find successive burst training sequence\n");

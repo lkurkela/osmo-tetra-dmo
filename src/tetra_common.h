@@ -14,6 +14,11 @@
 #define TETRA_SYM_PER_TS	255
 #define TETRA_BITS_PER_TS	(TETRA_SYM_PER_TS*2)
 
+enum tetra_infrastructure_mode {
+	TETRA_INFRA_DMO,
+	TETRA_INFRA_TMO
+};
+
 /* Chapter 22.2.x */
 enum tetra_log_chan {
 	TETRA_LC_UNKNOWN,
@@ -51,7 +56,8 @@ struct tetra_mac_state {
 
 	char *dumpdir;	/* Where to save traffic channel dump */
 	int ssi;	/* SSI */
-	int tsn;	/* Timeslon number */
+	int tsn;	/* Timeslot number */
+	enum tetra_infrastructure_mode infra_mode;
 };
 
 void tetra_mac_state_init(struct tetra_mac_state *tms);

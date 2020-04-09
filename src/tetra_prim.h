@@ -13,6 +13,8 @@ enum tetra_saps {
 	TETRA_SAP_TMA,
 	TETRA_SAP_TMB,
 	TETRA_SAP_TMD,
+	TETRA_SAP_DP,
+	TETRA_SAP_DMV
 };
 
 /* Table 23.1 */
@@ -42,6 +44,23 @@ struct tetra_tmvsap_prim {
 	union {
 		struct tmv_unitdata_param unitdata;
 		struct tmv_configure_param configure;
+	} u;
+};
+
+/* 300 396-3 - Table 19 */
+struct dmv_unitdata_param {
+	uint32_t mac_block_len;		/* length of mac block */
+	enum tetra_log_chan lchan;	/* to which lchan do we belong? */
+	int crc_ok;			/* was the CRC verified OK? */
+	uint32_t colour_code;	/* which scrambling code was used */
+	struct tetra_tdma_time tdma_time;/* TDMA timestamp  */
+	//uint8_t mac_block[412];		/* maximum num of bits in a non-QAM chan */
+};
+
+struct tetra_dmvsap_prim {
+	struct osmo_prim_hdr oph;
+	union {
+		struct dmv_unitdata_param unitdata;
 	} u;
 };
 

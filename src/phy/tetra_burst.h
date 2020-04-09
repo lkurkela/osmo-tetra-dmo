@@ -12,6 +12,17 @@ enum tp_sap_data_type {
 	TPSAP_T_SCH_F,
 };
 
+enum dp_sap_data_type {
+	DPSAP_T_DSB1,
+	DPSAP_T_DSB2,
+	DPSAP_T_NDB,
+	DPSAP_T_DLB,
+	DPSAP_T_SCH_HU,
+	DPSAP_T_SCH_F,
+};
+
+
+extern void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv);
 extern void tp_sap_udata_ind(enum tp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv);
 
 /* 9.4.4.2.6 Synchronization continuous downlink burst */

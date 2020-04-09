@@ -25,6 +25,7 @@
 #include <stdio.h>
 
 #include <phy/tetra_burst.h>
+#include <tetra_common.h>
 
 #define DQPSK4_BITS_PER_SYM	2
 
@@ -46,6 +47,11 @@
 #define NDB_BLK_BITS	(108*DQPSK4_BITS_PER_SYM)
 #define NDB_BBK_BITS	SB_BBK_BITS
 
+#define DMO_SB_BLK1_OFFSET	((6+1+40)*DQPSK4_BITS_PER_SYM)
+#define DMO_SB_BLK2_OFFSET	((6+1+40+60+19)*DQPSK4_BITS_PER_SYM)
+
+#define DMO_SB_BLK1_BITS	(60*DQPSK4_BITS_PER_SYM)
+#define DMO_SB_BLK2_BITS	(108*DQPSK4_BITS_PER_SYM)
 
 /* 9.4.4.3.1 Frequency Correction Field */
 static const uint8_t f_bits[80] = {
@@ -79,6 +85,8 @@ struct phase_adj_n {
 	uint16_t n1;
 	uint16_t n2;
 };
+
+
 
 /* Table 8.14 */
 static const struct phase_adj_n phase_adj_n[] = {
@@ -370,6 +378,47 @@ void tetra_burst_rx_cb(const uint8_t *burst, unsigned int len, enum tetra_train_
 		/* send two parts of the burst via TP-SAP into lower MAC */
 		tp_sap_udata_ind(TPSAP_T_BBK, bbk_buf, NDB_BBK_BITS, priv);
 		tp_sap_udata_ind(TPSAP_T_SCH_F, ndbf_buf, 2*NDB_BLK_BITS, priv);
+		break;
+	default:
+		// did we forgot something?
+		break;
+	}
+}
+
+void tetra_burst_dmo_rx_cb(const uint8_t *burst, unsigned int len, enum tetra_train_seq type, void *priv)
+{
+	uint8_t bbk_buf[NDB_BBK_BITS];
+	uint8_t ndbf_buf[2*NDB_BLK_BITS];
+
+	switch (type) {
+	case TETRA_TRAIN_SYNC:
+		/* Split SB1, SB2 Block */
+		/* send parts of the burst via DP-SAP into lower MAC */
+		dp_sap_udata_ind(DPSAP_T_DSB1, burst+DMO_SB_BLK1_OFFSET, DMO_SB_BLK1_BITS, priv);
+		dp_sap_udata_ind(DPSAP_T_DSB2, burst+DMO_SB_BLK2_OFFSET, DMO_SB_BLK2_BITS, priv);
+		break;
+	case TETRA_TRAIN_NORM_2:
+		/* re-combine the broadcast block */
+		memcpy(bbk_buf, burst+NDB_BBK1_OFFSET, NDB_BBK1_BITS);
+		memcpy(bbk_buf+NDB_BBK1_BITS, burst+NDB_BBK2_OFFSET, NDB_BBK2_BITS);
+		/* send three parts of the burst via TP-SAP into lower MAC */
+		tp_sap_udata_ind(TPSAP_T_BBK, bbk_buf, NDB_BBK_BITS, priv);
+		tp_sap_udata_ind(TPSAP_T_NDB, burst+NDB_BLK1_OFFSET, NDB_BLK_BITS, priv);
+		tp_sap_udata_ind(TPSAP_T_NDB, burst+NDB_BLK2_OFFSET, NDB_BLK_BITS, priv);
+		break;
+	case TETRA_TRAIN_NORM_1:
+		/* re-combine the broadcast block */
+		memcpy(bbk_buf, burst+NDB_BBK1_OFFSET, NDB_BBK1_BITS);
+		memcpy(bbk_buf+NDB_BBK1_BITS, burst+NDB_BBK2_OFFSET, NDB_BBK2_BITS);
+		/* re-combine the two parts */
+		memcpy(ndbf_buf, burst+NDB_BLK1_OFFSET, NDB_BLK_BITS);
+		memcpy(ndbf_buf+NDB_BLK_BITS, burst+NDB_BLK2_OFFSET, NDB_BLK_BITS);
+		/* send two parts of the burst via TP-SAP into lower MAC */
+		tp_sap_udata_ind(TPSAP_T_BBK, bbk_buf, NDB_BBK_BITS, priv);
+		tp_sap_udata_ind(TPSAP_T_SCH_F, ndbf_buf, 2*NDB_BLK_BITS, priv);
+		break;
+	default:
+		// did we forgot something?
 		break;
 	}
 }

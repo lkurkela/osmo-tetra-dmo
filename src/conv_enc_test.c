@@ -49,6 +49,11 @@ void tp_sap_udata_ind(enum tp_sap_data_type type, const uint8_t *bits, unsigned 
 {
 }
 
+/* incoming DP-SAP UNITDATA.ind  from PHY into lower MAC */
+void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv)
+{
+}
+
 static void decode_schf(const uint8_t *bits)
 {
 	uint8_t type4[1024];
