@@ -323,7 +323,7 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 				tcd->masterslave_link_flag = bits_to_uint(type2+8, 1);
 				tcd->gateway_message_flag = bits_to_uint(type2+9, 1);
 				tcd->ab_channel_usage = bits_to_uint(type2+10, 2);
-				tcd->time.tn = bits_to_uint(type2+12, 2);
+				tcd->time.tn = bits_to_uint(type2+12, 2) + 1;
 				tcd->time.fn = bits_to_uint(type2+14, 5);
 				tcd->encryption_state = bits_to_uint(type2+19, 2);
 
@@ -372,8 +372,6 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 				tcd->src_address = bits_to_uint(type2+pointer, 24);
 				pointer = pointer + 24;
 			}
-
-			uint16_t mcc, mnc;
 
 			if (tcd->communication_type < 2) {
 				tcd->mni = bits_to_uint(type2+pointer, 24);

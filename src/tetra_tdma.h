@@ -2,6 +2,8 @@
 #define TETRA_TDMA_H
 
 #include <stdint.h>
+#include <math.h>
+#include <phy/tetra_burst_sync.h>
 
 struct tetra_tdma_time {
 	uint16_t hn;    /* hyperframe number (1 ... 65535) */
@@ -17,5 +19,6 @@ void tetra_tdma_time_add_fn(struct tetra_tdma_time *tm, uint32_t fn_count);
 char *tetra_tdma_time_dump(const struct tetra_tdma_time *tm);
 
 uint32_t tetra_tdma_time2fn(struct tetra_tdma_time *tm);
+void tetra_tdma_time_add_burst_delta(struct tetra_tdma_time *tm, struct tetra_rx_state *trs);
 
 #endif

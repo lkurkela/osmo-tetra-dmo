@@ -116,6 +116,7 @@ int main(int argc, char **argv)
 			struct frame *encoded = (struct frame *)encoded_buf;
 
 			int rc = floats_to_bits(zmq_msg_data(&input_msg), encoded, ENCODED_MAXLEN);
+			trs->modem_burst_rx_timestamp = encoded->m.time;
 
 			tetra_burst_sync_in(trs, encoded->data, encoded->m.len);
 		}

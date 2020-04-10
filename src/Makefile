@@ -1,5 +1,5 @@
 CFLAGS=-g -Wall `pkg-config --cflags libosmocore 2> /dev/null` -I. -I../../suo/libsuo
-LDLIBS=`pkg-config --libs libosmocore 2> /dev/null` -losmocore -lzmq
+LDLIBS=`pkg-config --libs libosmocore 2> /dev/null` -losmocore -lzmq -lm
 
 all: conv_enc_test crc_test tetra-rx tetra-rx-dmo float_to_bits tunctl
 
