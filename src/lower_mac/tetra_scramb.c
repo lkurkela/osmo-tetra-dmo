@@ -106,7 +106,7 @@ uint32_t tetra_dmo_scramb_get_init(uint32_t mni, uint32_t srcaddr)
 	mni &= 0x3f;
 	srcaddr &= 0xffffff;
 
-	scramb_init = (mni) | (srcaddr << 6); // = colour code
+	scramb_init = (srcaddr) | (mni << 24); // = colour code
 	scramb_init = (scramb_init << 2) | SCRAMB_INIT;
 
 	return scramb_init;

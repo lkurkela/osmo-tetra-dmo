@@ -135,7 +135,7 @@ static const struct tetra_blk_param tetra_blk_param[] = {
 struct tetra_cell_data {
 	uint16_t mcc;
 	uint16_t mnc;
-	uint8_t colour_code;
+	uint32_t colour_code;
 	struct tetra_tdma_time time;
 
 	uint32_t scramb_init;
@@ -262,7 +262,7 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 
 	/* De-scramble, pay special attention to SB1 pre-defined scrambling */
 	memcpy(type4, bits, tbp->type345_bits);
-	if (type == DPSAP_T_SCH_S) {
+	if (type == DPSAP_T_SCH_S || type == DPSAP_T_SCH_H) {
 		tetra_scramb_bits(SCRAMB_INIT, type4, tbp->type345_bits);
 		tup->colour_code = SCRAMB_INIT;
 	} else {
@@ -337,7 +337,7 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 			}
 
 			/* compute the scrambling code for the current cell */
-			tcd->scramb_init = tetra_scramb_get_init(tcd->mcc, tcd->mnc, tcd->colour_code);
+			// tcd->scramb_init = tetra_scramb_get_init(tcd->mcc, tcd->mnc, tcd->colour_code);
 
 		}
 		/* update the PHY layer time */
@@ -377,17 +377,24 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 
 			if (tcd->communication_type < 2) {
 				tcd->mni = bits_to_uint(type2+pointer, 24);
-				mcc = bits_to_uint(type2+pointer, 10);
-				mnc = bits_to_uint(type2+pointer+10, 14);
+				tcd->mcc = bits_to_uint(type2+pointer, 10);
+				tcd->mnc = bits_to_uint(type2+pointer+10, 14);
 				pointer = pointer + 24;
 			}
 
 			uint8_t message_type = bits_to_uint(type2+pointer, 5);
 			pointer = pointer + 5;
 
-			printf("REPGW %d, Fill %d, Frag %d, num %d, FN cnt %d, dst-type %d, dst-addr %d, src-type %d, src %d, mni %d (MCC %d, MNC %d), msg-type %d",
+			/* calculate DM Colour Code */
+			uint8_t dcc_mni = tcd->mni & 0x3f;
+			uint32_t dcc_srcaddr = tcd->src_address & 0xffffff;
+			tcd->colour_code = (dcc_srcaddr) | (dcc_mni << 24); 
+
+			tcd->scramb_init = tetra_dmo_scramb_get_init(tcd->mni, tcd->src_address);
+
+			printf("REPGW %d, Fill %d, Frag %d, num %d, FN cnt %d, dst-type %d, dst-addr %d, src-type %d, src %d, mni %d (MCC %d, MNC %d), DCC %d, msg-type %d \n",
 				tcd->repgw_address, tcd->fillbit_indication, tcd->fragmentation_flag, tcd-> number_of_SCH_F_slots, tcd->frame_countdown,
-				tcd->dest_address_type, tcd->dest_address, tcd->src_address_type, tcd->src_address, tcd->mni, mcc, mnc,  message_type);
+				tcd->dest_address_type, tcd->dest_address, tcd->src_address_type, tcd->src_address, tcd->mni, tcd->mcc, tcd->mnc, tcd->colour_code, message_type);
 	
 		}
 		tup->lchan = TETRA_LC_SCH_H;
