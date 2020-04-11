@@ -402,15 +402,15 @@ void tetra_burst_dmo_rx_cb(const uint8_t *burst, unsigned int len, enum tetra_tr
 		dp_sap_udata_ind(DPSAP_T_SCH_H, burst+DMO_SB_BLK2_OFFSET, DMO_SB_BLK2_BITS, priv);
 		break;
 	case TETRA_TRAIN_NORM_2:
-		/* send two parts of the burst via DP-SAP into lower MAC (396-2 9.4.3.3.2) */
-		dp_sap_udata_ind(DPSAP_T_DSB1, burst+DMO_DNB_BLK1_OFFSET, DMO_DNB_BLK_BITS, priv);
-		dp_sap_udata_ind(DPSAP_T_DSB1, burst+DMO_DNB_BLK2_OFFSET, DMO_DNB_BLK_BITS, priv);
+		/* send two logical channels of the DNB burst via DP-SAP into lower MAC (396-2 9.4.3.3.3) */
+		dp_sap_udata_ind(DPSAP_T_DNB1, burst+DMO_DNB_BLK1_OFFSET, DMO_DNB_BLK_BITS, priv);
+		dp_sap_udata_ind(DPSAP_T_DNB1, burst+DMO_DNB_BLK2_OFFSET, DMO_DNB_BLK_BITS, priv);
 		break;
 	case TETRA_TRAIN_NORM_1:
 		/* re-combine the two block parts */
 		memcpy(dnbf_buf, burst+DMO_DNB_BLK1_OFFSET, DMO_DNB_BLK_BITS);
 		memcpy(dnbf_buf+DMO_DNB_BLK_BITS, burst+DMO_DNB_BLK2_OFFSET, DMO_DNB_BLK_BITS);
-		/* send two parts of the burst via DP-SAP into lower MAC */
+		/* send one logical channel of the DNB burst via DP-SAP into lower MAC */
 		dp_sap_udata_ind(DPSAP_T_SCH_F, dnbf_buf, 2*DMO_DNB_BLK_BITS, priv);
 		break;
 	default:

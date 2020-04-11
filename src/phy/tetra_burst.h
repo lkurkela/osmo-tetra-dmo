@@ -15,13 +15,15 @@ enum tp_sap_data_type {
 enum dp_sap_data_type {
 	DPSAP_T_DSB1,
 	DPSAP_T_DSB2,
-	DPSAP_T_NDB,
+	DPSAP_T_DNB1,
 	DPSAP_T_DLB,
 	DPSAP_T_SCH_F,
 	DPSAP_T_SCH_S,
 	DPSAP_T_SCH_H,
 	DPSAP_T_STCH,
-	DPSAP_T_TCH
+	DPSAP_T_TCH,
+	DPSAP_T_TCH_S_F,
+	DPSAP_T_TCH_S_H
 };
 
 
