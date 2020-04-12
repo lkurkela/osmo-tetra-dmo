@@ -343,6 +343,19 @@ const char *tetra_get_macpdu_name(uint8_t pdu_type)
 	return get_value_string(tetra_macpdu_t_names, pdu_type);
 }
 
+static const struct value_string tetra_dmacpdu_t_names[5] = {
+	{ TETRA_PDU_T_DMAC_DATA,	"DATA" },
+	{ TETRA_PDU_T_DMAC_FRAG_END, "FRAG/END" },
+	{ TETRA_PDU_T_DMAC_SUPPL,	"SUPPLEMENTARY" },
+	{ TETRA_PDU_T_DMAC_USIGNAL,	"U-SIGNAL" },
+	{ 0, NULL }
+};
+
+const char *tetra_get_dmacpdu_name(uint8_t pdu_type)
+{
+	return get_value_string(tetra_dmacpdu_t_names, pdu_type);
+}
+
 static const struct value_string serv_det_names[] = {
 	{ BS_SERVDET_REG_RQD,		"Registration mandatory" },
 	{ BS_SERVDET_DEREG_RQD,		"De-registration mandatory" },

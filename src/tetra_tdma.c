@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include <sys/time.h>
 
 #include "tetra_tdma.h"
 
@@ -101,16 +102,20 @@ uint32_t tetra_tdma_time2fn(struct tetra_tdma_time *tm)
 
 void tetra_tdma_time_add_burst_delta(struct tetra_tdma_time *tm, struct tetra_rx_state *trs)
 {
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	
 	if (trs->modem_prev_burst_rx_timestamp > 0) {
 		uint32_t tn_ns = 14166667; // 1 timeslot = 510 modulation bits = 510 * 250/9us = ~14166667ns = ~14,167ms 
 
 		uint64_t curr = trs->modem_burst_rx_timestamp;
 		uint64_t prev = trs->modem_prev_burst_rx_timestamp;
-		uint64_t delta_ns = curr - prev;
+		int64_t delta_ns = curr - prev;
 		float delta_ts = (float)delta_ns / tn_ns;
 		uint32_t delta_ts_int = round(delta_ts);
 
-		printf("#### MODEM SYNC BURST CURR %ld, PREV %ld -> DELTA %ld (+%d TS)", curr, prev, delta_ns, delta_ts_int);
+		printf("\n#### MODEM SYNC BURST CURR %ld, PREV %ld -> DELTA %ld (+%d TN)", curr, prev, delta_ns, delta_ts_int);
+		printf("\n ### HOST CURR %f\n", ((double)now.tv_sec+(double)now.tv_usec/1000000) );
 		trs->modem_prev_burst_rx_timestamp = trs->modem_burst_rx_timestamp;
 		tetra_tdma_time_add_tn(tm, delta_ts_int);
 

@@ -44,6 +44,19 @@ enum tetra_log_chan {
 
 uint32_t bits_to_uint(const uint8_t *bits, unsigned int len);
 
+#define FRAGSLOT_MSGB_SIZE 8192
+#define FRAGSLOT_NR_SLOTS 5
+struct fragslot {
+	int active;
+	int fragtimer;	
+	struct msgb *msgb;
+	int length;
+	int fragments;
+	int encryption;
+};
+
+struct fragslot fragslots[FRAGSLOT_NR_SLOTS]; /* slots are 1-4 but sometimes  slot==0 */
+
 #include "tetra_tdma.h"
 struct tetra_phy_state {
 	struct tetra_tdma_time time;

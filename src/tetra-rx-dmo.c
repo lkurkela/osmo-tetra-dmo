@@ -29,6 +29,8 @@
 
 #include <osmocom/core/utils.h>
 #include <osmocom/core/talloc.h>
+#include <osmocom/core/msgb.h>
+#include <osmocom/core/bits.h>
 
 #include "tetra_common.h"
 #include <phy/tetra_burst.h>
@@ -77,10 +79,18 @@ int main(int argc, char **argv)
 
 	tms = talloc_zero(tetra_tall_ctx, struct tetra_mac_state);
 	tetra_mac_state_init(tms);
-	tms->infra_mode = TETRA_INFRA_DMO; // FIXME 
+	tms->infra_mode = TETRA_INFRA_DMO; 
 
 	trs = talloc_zero(tetra_tall_ctx, struct tetra_rx_state);
 	trs->burst_cb_priv = tms;
+
+	memset((void *)&fragslots,0,sizeof(struct fragslot)*FRAGSLOT_NR_SLOTS); 
+	char desc[]="slot \0";
+	for (int k=0;k<FRAGSLOT_NR_SLOTS;k++) {
+		desc[4]='0'+k;
+		fragslots[k].msgb=msgb_alloc(8192, desc);
+		msgb_reset(fragslots[k].msgb);
+	}
 
 	while ((opt = getopt(argc, argv, "d:")) != -1) {
 		switch (opt) {

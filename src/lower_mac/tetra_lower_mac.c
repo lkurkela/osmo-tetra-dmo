@@ -129,6 +129,20 @@ static const struct tetra_blk_param tetra_blk_param[] = {
 		.interleave_a	= 101,
 		.have_crc16	= 1,
 	},
+	[DPSAP_T_TCH_S_F] = {
+		.name		= "TCH_S_F",
+		.type345_bits	= 432,
+		.type2_bits	= 432,
+		.type1_bits	= 432
+	},
+	[DPSAP_T_DNB1] = {
+		.name		= "DNB1",
+		.type345_bits	= 216,
+		.type2_bits	= 144,
+		.type1_bits	= 124,
+		.interleave_a	= 101,
+		.have_crc16	= 1,
+	},
 
 };
 
@@ -163,41 +177,6 @@ enum DMO_SYNC_PDU_TYPE {
 	DPRES_SYNC
 };
 
-enum DMO_MESSAGE_TYPE {
-	DM_RESERVED,
-	DM_SDS_OCCUPIED,
-	DM_TIMING_REQ,
-	DM_TIMING_ACK,
-	RESERVED_4,
-	RESERVED_5,
-	RESERVED_6,
-	RESERVED_7,
-	DM_SETUP,
-	DM_SETUP_PRES,
-	DM_CONNECT,
-	DM_DISCONNECT,
-	DM_CONNECT_ACK,
-	DM_OCCUPIED,
-	DM_RELEASE,
-	DM_TX_CEASED,
-	DM_TX_REQ,
-	DM_TX_ACCEPT,
-	DM_PREEMPT,
-	DM_PRE_ACCEPT,
-	DM_REJECT,
-	DM_INFO,
-	DM_SDS_UDATA,
-	DM_SDS_DATA,
-	DM_SDS_ACK,
-	GW_SPECIFIC_MESSAGE,
-	RESERVED_26,
-	RESERVED_27,
-	RESERVED_28,
-	RESERVED_29,
-	PROPRIETARY_30,
-	PROPRIETARY_31
-};
-
 int is_bsch(struct tetra_tdma_time *tm)
 {
 	if (tm->fn == 18 && tm->tn == 4 - ((tm->mn+1)%4))
@@ -225,6 +204,20 @@ struct tetra_tmvsap_prim *tmvsap_prim_alloc(uint16_t prim, uint8_t op)
 	return ttp;
 }
 
+struct tetra_dmvsap_prim *dmvsap_prim_alloc(uint16_t prim, uint8_t op)
+{
+	struct tetra_dmvsap_prim *ttp;
+
+	ttp = talloc_zero(NULL, struct tetra_dmvsap_prim);
+	ttp->oph.msg = msgb_alloc(412, "dmvsap_prim");
+	ttp->oph.sap = TETRA_SAP_DMV;
+	ttp->oph.primitive = prim;
+	ttp->oph.operation = op;
+
+	return ttp;
+}
+
+
 /* incoming DP-SAP UNITDATA.ind  from PHY into lower MAC */
 void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv)
 {
@@ -239,21 +232,21 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 	const char *time_str;
 
 	/* DMV-SAP.UNITDATA.ind primitive which we will send to the upper MAC */
-	struct tetra_dmvsap_prim *ttp;
-	struct dmv_unitdata_param *tup;
+	struct tetra_dmvsap_prim *tdp;
+	struct dmv_unitdata_param *d_unitdata_param;
 
 	struct msgb *msg;
 
-	ttp = tmvsap_prim_alloc(PRIM_TMV_UNITDATA, PRIM_OP_INDICATION);
-	tup = &ttp->u.unitdata;
-	msg = ttp->oph.msg;
+	tdp = dmvsap_prim_alloc(PRIM_DMV_UNITDATA, PRIM_OP_INDICATION);
+	d_unitdata_param = &tdp->u.unitdata;
+	msg = tdp->oph.msg;
 
 	/* update the cell time */
 	memcpy(&tcd->time, &t_phy_state.time, sizeof(tcd->time));
 	time_str = tetra_tdma_time_dump(&tcd->time);
 
 	if (type == DPSAP_T_DSB2 && is_bnch(&tcd->time)) {
-		tup->lchan = TETRA_LC_BNCH;
+		d_unitdata_param->lchan = TETRA_LC_BNCH;
 		printf("BNCH FOLLOWS\n");
 	}
 
@@ -264,10 +257,10 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 	memcpy(type4, bits, tbp->type345_bits);
 	if (type == DPSAP_T_SCH_S || type == DPSAP_T_SCH_H) {
 		tetra_scramb_bits(SCRAMB_INIT, type4, tbp->type345_bits);
-		tup->colour_code = SCRAMB_INIT;
+		d_unitdata_param->colour_code = SCRAMB_INIT;
 	} else {
 		tetra_scramb_bits(tcd->scramb_init, type4, tbp->type345_bits);
-		tup->colour_code = tcd->scramb_init;
+		d_unitdata_param->colour_code = tcd->scramb_init;
 	}
 
 	DEBUGP("%s %s type4: %s\n", tbp->name, time_str,
@@ -294,14 +287,14 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 		printf("CRC COMP: 0x%04x ", crc);
 		if (crc == TETRA_CRC_OK) {
 			printf("OK\n");
-			tup->crc_ok = 1;
+			d_unitdata_param->crc_ok = 1;
 			printf("%s %s type1: %s\n", tbp->name, time_str,
 				osmo_ubit_dump(type2, tbp->type1_bits));
 		} else
 			printf("WRONG\n");
 	} else if (type == TPSAP_T_BBK) {
 		/* FIXME: RM3014-decode */
-		tup->crc_ok = 1;
+		d_unitdata_param->crc_ok = 1;
 		memcpy(type2, type4, tbp->type2_bits);
 		DEBUGP("%s %s type1: %s\n", tbp->name, time_str,
 			osmo_ubit_dump(type2, tbp->type1_bits));
@@ -315,7 +308,7 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 		printf("SYNC SCH/S PDU TYPE %s(0x%02x) ", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
 		printf("System code %s(0x%02x) \n", osmo_ubit_dump(type2+0, 4), bits_to_uint(type2+0, 4));
 		/* obtain information from SYNC PDU (396-3 - 9.1.1 Table 21) */
-		if (tup->crc_ok) {
+		if (d_unitdata_param->crc_ok) {
 			uint32_t sync_pdu_type = bits_to_uint(type2+4, 2);
 			switch (sync_pdu_type) {
 			case DMAC_SYNC:
@@ -327,7 +320,7 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 				tcd->time.fn = bits_to_uint(type2+14, 5);
 				tcd->encryption_state = bits_to_uint(type2+19, 2);
 
-				printf("C %d, M/S %d, GW %d, AB %d, TN %d FN %d ENC %d ", 
+				printf("C %d, M/S %d, GW %d, AB %d, TN %d FN %d ENC %d \n", 
 					tcd->communication_type, tcd->masterslave_link_flag, tcd->gateway_message_flag, tcd->ab_channel_usage, 
 					tcd->time.tn, tcd->time.fn, tcd->encryption_state);
 				break;
@@ -342,12 +335,12 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 		}
 		/* update the PHY layer time */
 		memcpy(&t_phy_state.time, &tcd->time, sizeof(t_phy_state.time));
-		tup->lchan = TETRA_LC_SCH_S;
+		d_unitdata_param->lchan = TETRA_LC_SCH_S;
 		break;
 	case DPSAP_T_SCH_H:
 		printf("SYNC SCH/H TYPE %s(0x%02x) \n", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
 		/* obtain information from SYNC PDU (396-3 - 9.1.1 Table 22) */
-		if (tup->crc_ok) {
+		if (d_unitdata_param->crc_ok) {
 			tcd->repgw_address = bits_to_uint(type2, 10);
 			tcd->fillbit_indication = bits_to_uint(type2+10, 1);
 			tcd->fragmentation_flag = bits_to_uint(type2+11, 1);
@@ -387,27 +380,36 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 			uint8_t dcc_mni = tcd->mni & 0x3f;
 			uint32_t dcc_srcaddr = tcd->src_address & 0xffffff;
 			tcd->colour_code = (dcc_srcaddr) | (dcc_mni << 24); 
+			d_unitdata_param->colour_code = tcd->colour_code;
 
 			tcd->scramb_init = tetra_dmo_scramb_get_init(tcd->mni, tcd->src_address);
 
 			printf("REPGW %d, Fill %d, Frag %d, num %d, FN cnt %d, dst-type %d, dst-addr %d, src-type %d, src %d, mni %d (MCC %d, MNC %d), DCC %d, msg-type %d \n",
 				tcd->repgw_address, tcd->fillbit_indication, tcd->fragmentation_flag, tcd-> number_of_SCH_F_slots, tcd->frame_countdown,
 				tcd->dest_address_type, tcd->dest_address, tcd->src_address_type, tcd->src_address, tcd->mni, tcd->mcc, tcd->mnc, tcd->colour_code, message_type);
+			// printf("message payload: %s\n",osmo_ubit_dump(type2+pointer, tbp->type2_bits-pointer));
 	
 		}
-		tup->lchan = TETRA_LC_SCH_H;
+		d_unitdata_param->lchan = TETRA_LC_SCH_H;
 		break;
-	case DPSAP_T_TCH:
-		printf("TCH TYPE %s(0x%02x) \n", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
-		tup->lchan = TETRA_LC_TCH;
+	case DPSAP_T_DNB1:
+		printf("DNB-1 TYPE %s(0x%02x) \n", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
+		d_unitdata_param->lchan = TETRA_LC_STCH;
 		break;
+
 	case DPSAP_T_SCH_F:
 		printf("SCH/F TYPE %s(0x%02x) \n", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
-		tup->lchan = TETRA_LC_SCH_F;
+		d_unitdata_param->lchan = TETRA_LC_SCH_F;
 		break;
 	case DPSAP_T_STCH:
 		printf("STCH TYPE %s(0x%02x) \n", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
-		tup->lchan = TETRA_LC_STCH;
+		d_unitdata_param->lchan = TETRA_LC_STCH;
+		break;
+	case DPSAP_T_TCH:
+	case DPSAP_T_TCH_S_F:
+	case DPSAP_T_TCH_S_H:
+		printf("TCH TYPE %s(0x%02x) \n", osmo_ubit_dump(type2+4, 2), bits_to_uint(type2+4, 2));
+		d_unitdata_param->lchan = TETRA_LC_TCH;
 		break;
 	default:
 		printf("#### Here be dragon with SAP type %d\n", type);
@@ -415,9 +417,9 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 		break;
 	}
 	/* send Rx time along with the DMV-UNITDATA.ind primitive */
-	memcpy(&tup->tdma_time, &tcd->time, sizeof(tup->tdma_time));
+	memcpy(&d_unitdata_param->tdma_time, &tcd->time, sizeof(d_unitdata_param->tdma_time));
 
-	upper_mac_prim_recv(&ttp->oph, tms);
+	upper_mac_prim_recv(&tdp->oph, tms);
 
 
 }

@@ -8,6 +8,14 @@ enum tetra_mac_pdu_types {
 	TETRA_PDU_T_MAC_SUPPL = 3,
 };
 
+enum tetra_dmac_pdu_types {
+	TETRA_PDU_T_DMAC_DATA = 0,
+	TETRA_PDU_T_DMAC_FRAG_END = 1,
+	TETRA_PDU_T_DMAC_USIGNAL = 3,
+	TETRA_PDU_T_DMAC_SUPPL = 2,
+};
+
+
 enum tetra_mac_frage_pdu_types {
 	TETRA_MAC_FRAGE_FRAG = 0,
 	TETRA_MAC_FRAGE_END = 1,
@@ -77,6 +85,7 @@ struct tetra_si_decoded {
 };
 
 const char *tetra_get_macpdu_name(uint8_t pdu_type);
+const char *tetra_get_dmacpdu_name(uint8_t pdu_type);
 
 void macpdu_decode_sysinfo(struct tetra_si_decoded *sid, const uint8_t *si_bits);
 
