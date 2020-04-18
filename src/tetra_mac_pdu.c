@@ -346,7 +346,7 @@ const char *tetra_get_macpdu_name(uint8_t pdu_type)
 static const struct value_string tetra_dmacpdu_t_names[5] = {
 	{ TETRA_PDU_T_DMAC_DATA,	"DATA" },
 	{ TETRA_PDU_T_DMAC_FRAG_END, "FRAG/END" },
-	{ TETRA_PDU_T_DMAC_SUPPL,	"SUPPLEMENTARY" },
+	{ TETRA_PDU_T_DMAC_RESERVED,	"RESERVED/SUPPLEMENTARY" },
 	{ TETRA_PDU_T_DMAC_USIGNAL,	"U-SIGNAL" },
 	{ 0, NULL }
 };

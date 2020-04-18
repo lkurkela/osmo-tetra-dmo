@@ -444,17 +444,21 @@ static void parse_dm_message(uint8_t message_type, struct tetra_dmvsap_prim *dmv
 		uint64_t user_defined_data = 0;
 		uint16_t predefined_status = 0;
 		uint16_t length_indicator = 0;
+		const char *user_data;
 		switch(short_data_type_identifier) {
 			case 0: // data1
 				user_defined_data = bits_to_uint(bits+pointer, 16); 
+				user_data = osmo_ubit_dump(bits+pointer, 16);
 				pointer += 16;
 				break;
 			case 1:	// data2
 				user_defined_data = bits_to_uint(bits+pointer, 32);
+				user_data = osmo_ubit_dump(bits+pointer, 32);
 				pointer += 32;
 				break;
 			case 2: // data3
 				user_defined_data = bits_to_uint(bits+pointer, 64);
+				user_data = osmo_ubit_dump(bits+pointer, 64);
 				pointer += 64;
 				break;
 			case 3: // length indicator + data4
@@ -552,12 +556,12 @@ static void rx_macfrag(struct tetra_dmvsap_prim *tmvp, struct tetra_mac_state *t
 }
 
 /* 9.2.3 DMAC-END PDU */
-static void rx_macend(struct tetra_dmvsap_prim *tmvp, struct tetra_mac_state *tms, int slot)
+static void rx_macend(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_state *tms, int slot)
 {
-	struct msgb *msg = tmvp->oph.msg;
+	struct msgb *msg = dmvp->oph.msg;
 	int tmpdu_offset;
 	uint8_t *bits = msg->l1h;
-	struct msgb *fragmsgb;
+	struct msgb *fragmsgb = fragslots[slot].msgb;
 	int n=0;
 	int m=0;
 
@@ -566,14 +570,15 @@ static void rx_macend(struct tetra_dmvsap_prim *tmvp, struct tetra_mac_state *tm
 	m=1; uint8_t fillbits_present=bits_to_uint(bits+n, m); n=n+m;
 	int len=msgb_l1len(msg)-4;
 
-	fragmsgb=fragslots[slot].msgb;
-
 	fragslots[slot].fragments++;
 	if (fragslots[slot].active) {
 		append_frag_bits(slot,bits+n,len,fillbits_present);
 
 		/* for now filter out just SDS messages to hide the fact that the fragment stuff doesn't work 100% correctly :) */
 		uint8_t *b = fragmsgb->l2h;
+		printf("\nFRAGMENT DECODE fragments=%i len=%i slot=%i Encr=%i ",fragslots[slot].fragments,fragslots[slot].length,slot,fragslots[slot].encryption);
+		fflush(stdout); /* TODO: remove this in the future, for now leave it so that the printf() is shown if rx_tl_sdu segfaults for somee reason */
+		printf("\nMessage: %s\n", osmo_ubit_dump(b, msgb_l2len));
 
 		if (b) {
 			uint8_t mle_pdisc = bits_to_uint(b, 3);
@@ -626,7 +631,7 @@ static void rx_dmo_dmac_data(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_st
 			srcaddr = bits_to_uint(bits+pointer, 24); pointer += 24;
 		}
 		uint32_t mni = bits_to_uint(bits+pointer, 24); pointer += 24;
-		uint8_t message_type = bits_to_uint(bits+pointer, 5); pointer += 5;
+		uint8_t message_type = bits_to_uint(bits+pointer, 5); 
 
 		msg->l2h = msg->l1h+pointer;
 		const char *message_name = tetra_get_dmo_message_type_name(message_type);
@@ -649,16 +654,17 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 	struct msgb *msg = dmvp->oph.msg;
 	uint8_t *bits = msg->l1h;
 	int pointer = 12;
+	struct msgb *fragmsgb;
 
 	if (tup->lchan == TETRA_LC_SCH_S) {
 
 		int slot = 0;
-		struct msgb *fragmsgb;
 		int tmplen;
 
 		// int len=msgb_l1len(msg);
+		msg->l1h=bits+4;
 
-		if (fragslots[slot].active) printf("\nWARNING: leftover fragment slot\n");
+		// if (fragslots[slot].active) printf("\nWARNING: leftover fragment slot\n");
 		fragmsgb=fragslots[slot].msgb;
 		printf ("\nFRAGMENT START slot=%i msgb=%p\n",slot,fragmsgb);
 		msgb_reset(fragmsgb);
@@ -703,7 +709,7 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 			pdu_dmac_sync->encryption_key_number = bits_to_uint(bits+55, 5);
 		}
 
-	} else {
+	} else { // tup->lchan == TETRA_LC_SCH_H
 
 		if (pdu_dmac_sync->communication_type >0 ){
 			pdu_dmac_sync->repgw_address = bits_to_uint(bits, 10);
@@ -739,16 +745,18 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 		}
 
 		pdu_dmac_sync->message_type = bits_to_uint(bits+pointer, 5);
-		pointer = pointer + 5;
-
-		msg->l2h = msg->l1h+pointer;
+		// pointer = pointer + 5;
 
 		int slot = 0;
 		uint8_t fillbits_present=bits_to_uint(bits+10, 1); 
 		int len=msgb_l1len(msg);
 
 		if (fragslots[slot].active) {
+			int oldlen = fragslots[slot].length;
 			append_frag_bits(slot,bits,len,fillbits_present);
+			fragmsgb=fragslots[slot].msgb;
+			fragmsgb->l2h=fragmsgb->l1h+(oldlen+pointer-4); // aim to the message type field of full message
+
 		} else {
 			printf("\nFRAG: got fragment without start packet for slot=%i\n",slot);
 		}
@@ -799,7 +807,7 @@ static int rx_dmv_unitdata_ind(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_
 		rx_dmo_signalling(dmvp, tms); //DMAC-SYNC SCH/H
 		if (pdu_dmac_sync->fragmentation_flag == 0) {
 			// start message parsing
-			parse_dm_message(pdu_dmac_sync->message_type, dmvp);
+			// parse_dm_message(pdu_dmac_sync->message_type, dmvp);
 		}
 		break;
 	case TETRA_LC_STCH:
@@ -811,14 +819,8 @@ static int rx_dmv_unitdata_ind(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_
 	case TETRA_LC_UNKNOWN:
 	case TETRA_LC_SCH_F:
 		switch (pdu_type) {
-		case TETRA_PDU_T_BROADCAST:
-			rx_bcast(dmvp, tms);
-			break;
-		case TETRA_PDU_T_MAC_RESOURCE:
-			rx_resrc(dmvp, tms);
-			break;
-		case TETRA_PDU_T_MAC_SUPPL:
-			rx_suppl(dmvp, tms);
+		case TETRA_PDU_T_DMAC_DATA:
+			rx_dmo_dmac_data(dmvp, tms);
 			break;
 		case TETRA_PDU_T_MAC_FRAG_END:
 			if (msg->l1h[3] == TETRA_MAC_FRAGE_FRAG) {
@@ -832,6 +834,8 @@ static int rx_dmv_unitdata_ind(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_
 				rx_macend(dmvp, tms, slot);
 			}
 			break;
+		case TETRA_PDU_T_DMAC_USIGNAL:
+			printf("DMAC-U-SIGNAL PDU\n");
 		default:
 			printf("STRANGE pdu=%u\n", pdu_type);
 			break;

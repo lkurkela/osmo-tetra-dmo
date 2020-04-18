@@ -84,6 +84,7 @@ int main(int argc, char **argv)
 	trs = talloc_zero(tetra_tall_ctx, struct tetra_rx_state);
 	trs->burst_cb_priv = tms;
 
+	// initialize fragmentation slots
 	memset((void *)&fragslots,0,sizeof(struct fragslot)*FRAGSLOT_NR_SLOTS); 
 	char desc[]="slot \0";
 	for (int k=0;k<FRAGSLOT_NR_SLOTS;k++) {
@@ -92,6 +93,7 @@ int main(int argc, char **argv)
 		msgb_reset(fragslots[k].msgb);
 	}
 
+	// option - dumpdir
 	while ((opt = getopt(argc, argv, "d:")) != -1) {
 		switch (opt) {
 		case 'd':

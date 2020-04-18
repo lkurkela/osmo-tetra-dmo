@@ -11,8 +11,9 @@ enum tetra_mac_pdu_types {
 enum tetra_dmac_pdu_types {
 	TETRA_PDU_T_DMAC_DATA = 0,
 	TETRA_PDU_T_DMAC_FRAG_END = 1,
+	TETRA_PDU_T_DMAC_RESERVED = 2,
 	TETRA_PDU_T_DMAC_USIGNAL = 3,
-	TETRA_PDU_T_DMAC_SUPPL = 2,
+	TETRA_PDU_T_DMAC_TRAFFIC = 9
 };
 
 

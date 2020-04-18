@@ -326,6 +326,28 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 				break;
 
 			case DPRES_SYNC:
+				tcd->communication_type = bits_to_uint(type2+6, 2);
+				uint8_t mdmo_flag = bits_to_uint(type2+8, 1);
+				uint8_t twofreq_repeater_flag = bits_to_uint(type2+11, 1);
+				uint8_t repeater_opmode_flag = bits_to_uint(type2+12, 2);
+				uint8_t spacing_of_uplink = bits_to_uint(type2+14, 6);
+				tcd->masterslave_link_flag = bits_to_uint(type2+20, 1);
+				uint8_t channel_usage = bits_to_uint(type2+21, 2);
+				uint8_t channel_state = bits_to_uint(type2+23, 2);
+				tcd->time.tn = bits_to_uint(type2+25, 2) + 1;
+				tcd->time.fn = bits_to_uint(type2+27, 5);
+				// tcd->encryption_state = bits_to_uint(type2+19, 2);
+				uint8_t frame_countdown = bits_to_uint(type2+37, 2);
+				uint8_t dn232_dn233 = bits_to_uint(type2+47, 4);
+				uint8_t dt254 = bits_to_uint(type2+51, 3);
+				uint8_t pres_signal = 0;
+				if (tcd->masterslave_link_flag == 0) {
+					pres_signal = bits_to_uint(type2+54, 1);
+				}
+
+				printf("DPRES-SYNC - C %d, M/S %d, CH.usage %d, TN %d FN %d \n M-DMO %d, 2-Freq rep: %d, rep. op. modes %d, DN232 %d, DT254 %d\n", 
+					tcd->communication_type, tcd->masterslave_link_flag, channel_usage, tcd->time.tn, tcd->time.fn,
+					mdmo_flag, twofreq_repeater_flag, repeater_opmode_flag, dn232_dn233, dt254);
 				break;
 			}
 
