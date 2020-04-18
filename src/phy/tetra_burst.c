@@ -85,12 +85,16 @@ static const uint8_t t_bits[4] = { 1, 1, 0, 0 };
 static const uint8_t T_bits[6] = { 1, 1, 1, 0, 0, 0 };
 
 /* 9.4.4.3.6 Phase adjustment bits */
-enum phase_adj_bits { HA, HB, HC, HD, HE, HF, HG, HH, HI, HJ };
+enum phase_adj_bits { HA, HB, HC, HD, HE, HF, HG, HH, HI, HJ, HK, HL };
 struct phase_adj_n {
 	uint16_t n1;
 	uint16_t n2;
 };
 
+/* DMO EN 300 396-2 - 9.4.3.3.3 Normal Training sequence and preamble */
+static const uint8_t j_bits[12] = { 0,0, 1,1, 0,0, 1,0, 0,0, 1,1 };
+static const uint8_t k_bits[12] = { 1,0, 0,1, 1,0, 1,0, 1,0, 0,1 };
+static const uint8_t l_bits[12] = { 0,0, 0,1, 0,1, 0,0, 0,1, 1,1 };
 
 
 /* Table 8.14 */
@@ -105,6 +109,8 @@ static const struct phase_adj_n phase_adj_n[] = {
 	[HH] = { .n1 = 118,	.n2 = 224 },
 	[HI] = { .n1 = 3,	.n2 = 103 },
 	[HJ] = { .n1 = 104,	.n2 = 224 },
+	[HK] = { .n1 = 8,	.n2 = 126 },
+	[HL] = { .n1 = 8,	.n2 = 126 }
 };
 
 static const int8_t bits2phase[] = {
@@ -278,6 +284,43 @@ int build_norm_c_d_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bb, c
 
 	return cur - buf;
 }
+
+/* EN 300 396-2 - 9.4.3.2.1 DM Synchronization Burst */
+int build_dm_sync_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bkn2)
+{
+	uint8_t *cur = buf;
+	uint8_t *hl;
+	
+	/* Preamble bits: l1 to l12 */
+	memcpy(cur, l_bits, 12);
+	cur += 12;
+
+	/* Phase adjustment bits: hl1 to hl2 */
+	hl = cur;
+	cur += 2;
+
+	/* Scrambled block 1 bits: bkn1(1) to bkn1(120) */
+	memcpy(cur, bkn1, 120);
+	cur += 120;
+
+	/* Synchronization training sequence: y1 to y38 */
+	memcpy(cur, y_bits, 38);
+	cur += 38;
+
+	/* Scrambled block2 bits: bkn2(1) to bkn2(216) */
+	memcpy(cur, bkn2, 216);
+	cur += 216;
+
+	/* Tail bits: t1 to t2 */
+	memcpy(cur, t_bits+2, 2);
+	cur += 2;
+
+	/* put in the phase adjustment bits */
+	put_phase_adj_bits(buf, HL, hl);
+
+	return cur - buf;
+}
+
 
 int tetra_find_train_seq(const uint8_t *in, unsigned int end_of_in,
 			 uint32_t mask_of_train_seq, unsigned int *offset)

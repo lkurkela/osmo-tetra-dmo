@@ -42,6 +42,17 @@ enum tetra_log_chan {
 	/* FIXME: QAM */
 };
 
+enum dm_channel_state {
+	DM_CHANNEL_S_MS_IDLE_UNKNOWN,
+	DM_CHANNEL_S_MS_IDLE_FREE,
+	DM_CHANNEL_S_MS_IDLE_OCCUPIED,
+	DM_CHANNEL_S_MS_IDLE_RESERVED,
+	DM_CHANNEL_S_MASTER_OCCUPIED,
+	DM_CHANNEL_S_MASTER_RESERVED,
+	DM_CHANNEL_S_SLAVE_OCCUPIED,
+	DM_CHANNEL_S_SLAVE_RESERVED
+};
+
 uint32_t bits_to_uint(const uint8_t *bits, unsigned int len);
 
 #define FRAGSLOT_MSGB_SIZE 8192
@@ -74,6 +85,8 @@ struct tetra_mac_state {
 	int ssi;	/* SSI */
 	int tsn;	/* Timeslot number */
 	enum tetra_infrastructure_mode infra_mode;
+	enum dm_channel_state channel_state;
+	uint64_t channel_state_last_chg;
 };
 
 void tetra_mac_state_init(struct tetra_mac_state *tms);

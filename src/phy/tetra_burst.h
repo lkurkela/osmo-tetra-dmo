@@ -36,6 +36,9 @@ int build_sync_c_d_burst(uint8_t *buf, const uint8_t *sb, const uint8_t *bb, con
 /* 9.4.4.2.5 Normal continuous downlink burst */
 int build_norm_c_d_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bb, const uint8_t *bkn2, int two_log_chan);
 
+/* EN 300 396-2 - 9.4.3.2.1 DM Synchronization Burst */
+int build_dm_sync_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bkn2);
+
 enum tetra_train_seq {
 	TETRA_TRAIN_NORM_1,
 	TETRA_TRAIN_NORM_2,
