@@ -299,6 +299,10 @@ int build_dm_sync_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bkn2)
 	hl = cur;
 	cur += 2;
 
+	/* Frequency correction bits: f1 to f80 */
+	memcpy(cur, f_bits, 80);
+	cur += 80;
+
 	/* Scrambled block 1 bits: bkn1(1) to bkn1(120) */
 	memcpy(cur, bkn1, 120);
 	cur += 120;
