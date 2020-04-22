@@ -40,7 +40,7 @@ int build_norm_c_d_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bb, c
 int build_dm_sync_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bkn2);
 
 /* EN 300 396-2 - 9.4.3.2.1 DM Normal Burst */
-/* Type: TRUE if preamble 1 and training sequence 1 (TCH, SCH/F), FALSE if preamble 2 and training sequence 2 (STCH+TCH, STCH+STCH)*/
+/* Type: 1 if preamble 1 and training sequence 1 (TCH, SCH/F), anything else if preamble 2 and training sequence 2 (STCH+TCH, STCH+STCH)*/
 int build_dm_norm_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bkn2, const uint8_t type);
 
 enum tetra_train_seq {
