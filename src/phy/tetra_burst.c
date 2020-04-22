@@ -96,6 +96,8 @@ static const uint8_t j_bits[12] = { 0,0, 1,1, 0,0, 1,0, 0,0, 1,1 };
 static const uint8_t k_bits[12] = { 1,0, 0,1, 1,0, 1,0, 1,0, 0,1 };
 static const uint8_t l_bits[12] = { 0,0, 0,1, 0,1, 0,0, 0,1, 1,1 };
 
+/* DMO EN 300 396-2 - 9.4.3.3.2 Inter-slot frequency correction bits */
+static const uint8_t g_bits[40] = { 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0};
 
 /* Table 8.14 */
 static const struct phase_adj_n phase_adj_n[] = {
@@ -290,7 +292,7 @@ int build_dm_sync_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bkn2)
 {
 	uint8_t *cur = buf;
 	uint8_t *hl;
-	
+
 	/* Preamble bits: l1 to l12 */
 	memcpy(cur, l_bits, 12);
 	cur += 12;
@@ -325,6 +327,54 @@ int build_dm_sync_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bkn2)
 	return cur - buf;
 }
 
+
+
+/* EN 300 396-2 - 9.4.3.2.1 DM Normal Burst */
+/* Type: 1 if preamble 1 and training sequence 1 (TCH, SCH/F), any other if preamble 2 and training sequence 2 (STCH+TCH, STCH+STCH)*/
+int build_dm_norm_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bkn2, const uint8_t type)
+{
+	uint8_t *cur = buf;
+	uint8_t *hk;
+	
+	/* Preamble bits: j1 to j12 or k1 to k12*/
+	if(type==1){
+		memcpy(cur, j_bits, 12);
+	}
+	else{
+		memcpy(cur, k_bits, 12);
+	}
+	cur += 12;
+
+	/* Phase adjustment bits: hk1 to hk2 */
+	hk = cur;
+	cur += 2;
+
+	/* Scrambled block 1 bits: bkn1(1) to bkn1(120) */
+	memcpy(cur, bkn1, 216);
+	cur += 216;
+
+	/* Normal training sequence: n1 to n22 or p2 to p22 */
+	if(type==1){
+		memcpy(cur, n_bits, 22);
+	}
+	else{
+		memcpy(cur, p_bits, 22);
+	}
+	cur += 22;
+
+	/* Scrambled block2 bits: bkn2(1) to bkn2(216) */
+	memcpy(cur, bkn2, 216);
+	cur += 216;
+
+	/* Tail bits: t1 to t2 */
+	memcpy(cur, t_bits+2, 2);
+	cur += 2;
+
+	/* put in the phase adjustment bits */
+	put_phase_adj_bits(buf, HK, hk);
+
+	return cur - buf;
+}
 
 int tetra_find_train_seq(const uint8_t *in, unsigned int end_of_in,
 			 uint32_t mask_of_train_seq, unsigned int *offset)
