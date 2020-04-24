@@ -2,7 +2,7 @@ CFLAGS=-g -Wall `pkg-config --cflags libosmocore 2> /dev/null` -I. -I../../suo/l
 LDLIBS=`pkg-config --libs libosmocore 2> /dev/null` -losmocore -lzmq -lm -lpthread
 
 # all: conv_enc_test crc_test tetra-rx tetra-rx-dmo float_to_bits tunctl tetra-dmo-rep
-all: conv_enc_test crc_test float_to_bits tunctl tetra-dmo-rep
+all: conv_enc_test crc_test float_to_bits tunctl tetra-dmo-rep tetra-main
 
 debug: CFLAGS := -lasan $(CFLAGS) -fsanitize=address -fno-omit-frame-pointer -g -O0
 debug: LDLIBS := -lasan $(LDLIBS)
@@ -25,9 +25,11 @@ crc_test: crc_test.o tetra_common.o libosmo-tetra-mac.a
 # tetra-rx-dmo: tetra-rx-dmo.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 tetra-dmo-rep: tetra-dmo-rep.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 
+tetra-main: tetra-main.o timing.o libosmo-tetra-phy.a libosmo-tetra-mac.a
+
 conv_enc_test: conv_enc_test.o testpdu.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 
 tunctl: tunctl.o
 
 clean:
-	@rm -f tunctl float_to_bits crc_test tetra-rx tetra-rx-dmo tetra-dmo-rep conv_enc_test *.o phy/*.o lower_mac/*.o *.a
+	@rm -f tunctl float_to_bits crc_test tetra-rx tetra-rx-dmo tetra-dmo-rep tetra-main conv_enc_test *.o phy/*.o lower_mac/*.o *.a
