@@ -21,10 +21,10 @@ struct timing_state *timing_init()
 
 int timing_rx_burst(struct timing_state *s, const uint8_t *bits, int len, uint64_t ts)
 {
-	printf("%20lu: RX\n", ts);
+	//printf("%20lu: RX\n", ts);
 
 	// Find the nearest timeslot by comparing to the transmit counters
-	int64_t td_tx = ts - s->tx_slot;
+	int64_t td_tx = ts - s->tx_time;
 	float slotdiff = (float)td_tx / (float)s->slot_time;
 	int intdiff = roundf(slotdiff);
 	int rx_slot = intdiff + s->tx_slot;
@@ -70,7 +70,7 @@ int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t 
 		};
 
 		retlen = slotter_tx_burst(s->slotter, bits, maxlen, &tslot);
-		*ts = tx_time;
+		*ts = tx_time + tslot.diff;
 
 		// Go to the next slot
 		s->tx_time = tx_time + s->slot_time;
@@ -89,12 +89,13 @@ int timing_resync(struct timing_state *s, struct timing_slot *slot)
 	uint64_t next_time = slot->time;
 
 	/* Find the first slot that doesn't cause tx_time to jump backwards */
-	const int tx_time = s->tx_time;
+	const uint64_t tx_time = s->tx_time;
 	do {
 		// Go to the next slot
 		next_time += s->slot_time;
 		next_slot = (next_slot + 1) % TIMING_SLOTS;
 	} while ((int64_t)(next_time - tx_time) < 0);
+	printf("Skipped to %d\n", next_slot);
 
 	s->tx_time = next_time;
 	s->tx_slot = next_slot;

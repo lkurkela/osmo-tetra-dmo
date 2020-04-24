@@ -22,7 +22,11 @@ struct timing_state {
 
 struct timing_slot {
 	uint64_t time;    // Timestamp
-	int64_t  diff;    // For RX: Time difference from expected timestamp
+
+	/* For RX: Time difference from expected timestamp
+	 * For TX: Used to return a time offset from start of slot */
+	int64_t  diff;
+
 	unsigned char tn; // Timeslot Number (1 to 4)
 	unsigned char fn; // TDMA Frame Number (1 to 18)
 	unsigned char mn; // TDMA Multiframe Number (1 to 60)
