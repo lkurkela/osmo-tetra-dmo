@@ -39,6 +39,10 @@
 #include <tetra_prim.h>
 #include "tetra_upper_mac.h"
 #include <lower_mac/viterbi.h>
+#include "tetra-dmo-rep.h"
+
+
+#define swap16(x) ((x)<<8)|((x)>>8)
 
 struct tetra_blk_param {
 	const char *name;
@@ -172,6 +176,13 @@ struct tetra_cell_data {
 };
 static struct tetra_cell_data _tcd, *tcd = &_tcd;
 
+struct dmrep_sch_burst {
+	uint8_t block1[120];
+	uint8_t block2[216];
+
+};
+static struct dmrep_sch_burst _sch_burst, *sch_burst = &_sch_burst;
+
 enum DMO_SYNC_PDU_TYPE {
 	DMAC_SYNC,
 	DPRES_SYNC
@@ -189,6 +200,60 @@ int is_bnch(struct tetra_tdma_time *tm)
 	if (tm->fn == 18 && tm->tn == 4 - ((tm->mn+3)%4))
 		return 1;
 	return 0;
+}
+
+int build_encoded_block_sch(enum dp_sap_data_type type, uint8_t *in, uint8_t *out)
+{
+	const struct tetra_blk_param *tbp = &tetra_blk_param[type];
+
+	uint8_t type5[512];
+	uint8_t type4[512];
+	uint8_t type3dp[512*4];
+	uint8_t type3[512];
+	uint8_t type2[512];
+
+    // uint8_t burst[255*2];
+	uint16_t crc;
+	uint8_t *cur;
+
+	memset(type2, 0, sizeof(type2));
+	cur = type2;
+
+	/* SYNC SCH/S */
+	cur += osmo_pbit2ubit(type2, in, tbp->type1_bits);
+
+    printf("SCH/S type1: %s ", osmo_ubit_dump(type2, tbp->type1_bits));
+
+	crc = ~crc16_ccitt_bits(type2, tbp->type1_bits);
+	crc = swap16(crc);
+	cur += osmo_pbit2ubit(cur, (uint8_t *) &crc, 16);
+
+	/* Append 4 tail bits: type-2 bits */
+	cur += 4;
+
+	// printf("SYNC type2: %s\n", osmo_ubit_dump(sb_type2, 80));
+    
+	/* Run rate 2/3 RCPC code: type-3 bits*/
+	{
+        struct conv_enc_state *ces = calloc(1, sizeof(*ces));
+		conv_enc_init(ces);
+		conv_enc_input(ces, type2, tbp->type2_bits, type3dp);
+		get_punctured_rate(TETRA_RCPC_PUNCT_2_3, type3dp, tbp->type345_bits, type3);
+		free(ces);
+	}
+	// printf("SYNC type3: %s\n", osmo_ubit_dump(type3, tbp->type345_bits));
+
+	/* Run (120,11) block interleaving: type-4 bits */
+	block_interleave(tbp->type345_bits, tbp->interleave_a, type3, type4);
+	// printf("SYNC type4: %s\n", osmo_ubit_dump(type4, tbp->type345_bits));
+
+	/* Run scrambling (all-zero): type-5 bits */
+	memcpy(type5, type4, tbp->type345_bits);
+	tetra_scramb_bits(SCRAMB_INIT, type5, tbp->type345_bits);
+	// printf("SYNC type5: %s\n", osmo_ubit_dump(type5, tbp->type345_bits));
+
+	memcpy(out, type5, tbp->type345_bits);
+
 }
 
 struct tetra_tmvsap_prim *tmvsap_prim_alloc(uint16_t prim, uint8_t op)
@@ -356,6 +421,10 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 
 		}
 		/* update the PHY layer time */
+		if (t_phy_state.time.fn != tcd->time.fn || t_phy_state.time.tn != tcd->time.tn) {
+			printf(" #### TIME WARP - phy: %d/%d tcd: %d/%d ###\n",t_phy_state.time.fn,t_phy_state.time.tn,tcd->time.fn,tcd->time.tn);
+			// t_phy_state.time_adjust_cb_func(tcd->time.fn, tcd->time.tn);
+		}
 		memcpy(&t_phy_state.time, &tcd->time, sizeof(t_phy_state.time));
 		d_unitdata_param->lchan = TETRA_LC_SCH_S;
 		break;
@@ -615,4 +684,32 @@ void tp_sap_udata_ind(enum tp_sap_data_type type, const uint8_t *bits, unsigned 
 	upper_mac_prim_recv(&ttp->oph, tms);
 }
 
+/* used by layer 3 to deliver received message to layer 2 */
+int rx_dmv_unitdata_req(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_state *tms)
+{
+	struct dmv_unitdata_param *tup = &dmvp->u.unitdata;
+	struct msgb *msg = dmvp->oph.msg;
+	uint8_t pdu_type = bits_to_uint(msg->l1h, 2);
+	const char *pdu_name;
 
+	uint8_t burst[510];
+
+	if (tup->lchan == TETRA_LC_SCH_S) {
+		pdu_name = "SYNC";
+		build_encoded_block_sch(DPSAP_T_SCH_S, msg->l1h, sch_burst->block1);		
+
+	} else if (tup->lchan == TETRA_LC_SCH_H) {
+		build_encoded_block_sch(DPSAP_T_SCH_S, msg->l1h, sch_burst->block2);
+		build_dm_sync_burst(burst, sch_burst->block1, sch_burst->block2); 
+		printf("SYNC burst: %s\n", osmo_ubit_dump(burst, 255*2));
+		dp_sap_udata_req(DPSAP_T_SCH_H, burst, 510, tup->tdma_time);				
+
+	} else {
+		printf("puf");
+	}
+
+    
+    // printf("DPRES-SYNC burst: %s\n", osmo_ubit_dump(burst, 255*2));
+    // memcpy(out, burst, 510);
+
+}

@@ -24,6 +24,7 @@ struct tetra_rx_state {
 	uint64_t modem_burst_rx_timestamp; /* modem timestamp (ns) of burst end */
 	uint64_t modem_prev_burst_rx_timestamp; /* previous burst end (ns) */
 	enum modem_burst_sync_state modem_sync_state;
+	uint64_t host_burst_rx_timestamp;
 
 	void *burst_cb_priv;
 };

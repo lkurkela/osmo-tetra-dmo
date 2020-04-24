@@ -104,6 +104,7 @@ void tetra_tdma_time_add_burst_delta(struct tetra_tdma_time *tm, struct tetra_rx
 {
 	struct timeval now;
 	gettimeofday(&now, NULL);
+	uint64_t host_ts = now.tv_sec*1000000+now.tv_usec;
 	
 	if (trs->modem_prev_burst_rx_timestamp > 0) {
 		uint32_t tn_ns = 14166667; // 1 timeslot = 510 modulation bits = 510 * 250/9us = ~14166667ns = ~14,167ms 
@@ -115,12 +116,14 @@ void tetra_tdma_time_add_burst_delta(struct tetra_tdma_time *tm, struct tetra_rx
 		uint32_t delta_ts_int = round(delta_ts);
 
 		printf("\n#### MODEM SYNC BURST CURR %ld, PREV %ld -> DELTA %ld (+%d TN)", curr, prev, delta_ns, delta_ts_int);
-		printf("\n ### HOST CURR %f\n", ((double)now.tv_sec+(double)now.tv_usec/1000000) );
+		printf("\n ### HOST CURR %ld\n", host_ts );
 		trs->modem_prev_burst_rx_timestamp = trs->modem_burst_rx_timestamp;
 		tetra_tdma_time_add_tn(tm, delta_ts_int);
+		trs->host_burst_rx_timestamp = host_ts;
 
 	} else {
 		trs->modem_prev_burst_rx_timestamp = trs->modem_burst_rx_timestamp;
+		trs->host_burst_rx_timestamp = host_ts;
 
 	}
 }

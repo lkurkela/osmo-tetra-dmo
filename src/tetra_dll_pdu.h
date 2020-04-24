@@ -56,8 +56,45 @@ struct tetra_dmo_pdu_dmac_sync {
 	uint32_t src_address;
 	uint32_t mni;
     uint8_t message_type;
+	uint8_t message_fields[128]; // message dependent fields;
+	uint8_t message_fields_len;
+	uint8_t *dm_sdu[128]; //message 
+	uint8_t dm_sdu_len;
+	bool processed;
 };
 static struct tetra_dmo_pdu_dmac_sync _pdu_dmac_sync, *pdu_dmac_sync = &_pdu_dmac_sync;
+
+struct tetra_dmo_pdu_dpres_sync {
+    uint8_t system_code;
+    uint8_t sync_pdu_type;
+	uint8_t communication_type;
+	uint8_t m_dmo_flag;
+	uint8_t twofreq_repeater_flag;
+	uint8_t repeater_operating_modes;
+	uint8_t spacing_of_uplink;	
+	uint8_t masterslave_link_flag;
+	uint8_t channel_usage;
+	uint8_t channel_state;
+    uint8_t slot_number;
+    uint8_t frame_number;
+	uint8_t power_class;
+	uint8_t power_control_flag;
+	uint8_t frame_countdown;
+	uint8_t priority_level;
+	uint8_t dn232_dn233;
+	uint8_t dt254;
+	uint8_t dualwatch_sync_flag;
+	uint16_t repgw_address;
+	uint32_t mni;
+	uint8_t validity_time_unit;
+	uint8_t number_of_validity_time_units;
+	uint8_t max_dmms_power_class;
+	uint8_t usage_restriction_type;
+	uint8_t sckn;
+	uint32_t edsi_urtc_initialization_value;
+	__uint128_t urt_addressing;
+};
+static struct tetra_dmo_pdu_dpres_sync _pdu_dpres_sync, *pdu_dpres_sync = &_pdu_dpres_sync;
 
 
 struct tetra_dmo_pdu_dm_setup {

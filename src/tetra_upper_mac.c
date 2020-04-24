@@ -26,6 +26,8 @@
 #include <osmocom/core/utils.h>
 #include <osmocom/core/msgb.h>
 #include <osmocom/core/talloc.h>
+#include <osmocom/core/bits.h>
+#include <osmocom/core/bitvec.h>
 
 #include "tetra_common.h"
 #include "tetra_prim.h"
@@ -38,6 +40,7 @@
 #include "tetra_sndcp_pdu.h"
 #include "tetra_mle_pdu.h"
 #include "tetra_gsmtap.h"
+#include "lower_mac/tetra_lower_mac.h"
 
 static int rx_tm_sdu(struct tetra_mac_state *tms, struct msgb *msg, unsigned int len);
 
@@ -644,7 +647,122 @@ static void rx_dmo_dmac_data(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_st
 		printf("DMAC-DATA PDU - fill bit: %d, 2nd half stolen: %d, frag.flag: %d, nullPDU: %d \n", fill_bit, second_half_slot_stolen, fragmentation_flag, null_pdu);
 
 	}
+}
 
+static void rx_dm_dmacsync_sch_s(uint8_t *bits, struct tetra_dmo_pdu_dmac_sync *sync) {
+	sync->system_code = bits_to_uint(bits, 4);
+	sync->sync_pdu_type = bits_to_uint(bits+4, 2);
+	sync->communication_type = bits_to_uint(bits+6, 2);
+	if (sync->communication_type == 1 || sync->communication_type == 3) {
+		sync->masterslave_link_flag = bits_to_uint(bits+8, 1);
+	}
+	if (sync->communication_type == 2 || sync->communication_type == 3) {
+		sync->gateway_message_flag = bits_to_uint(bits+9, 1);
+
+	}
+	sync->ab_channel_usage = bits_to_uint(bits+10, 2);
+	sync->slot_number = bits_to_uint(bits+12, 2) + 1;
+	sync->frame_number = bits_to_uint(bits+14, 5);
+	sync->airint_encryption_state = bits_to_uint(bits+19, 2);
+	if (sync->airint_encryption_state>0) {
+		sync->time_variant_parameter = bits_to_uint(bits+21, 29);
+		sync->ksg_number = bits_to_uint(bits+51, 4);
+		sync->encryption_key_number = bits_to_uint(bits+55, 5);
+	}
+}
+
+int rx_dm_dmacsync_sch_h(uint8_t *bits, struct tetra_dmo_pdu_dmac_sync *sync) {
+
+	int pointer = 0;
+	if (pdu_dmac_sync->communication_type >0 ){
+		pdu_dmac_sync->repgw_address = bits_to_uint(bits, 10);
+	} else {
+		pdu_dmac_sync->repgw_address = 0;
+	}
+	pdu_dmac_sync->fillbit_indication = bits_to_uint(bits+10, 1);
+	pdu_dmac_sync->fragmentation_flag = bits_to_uint(bits+11, 1);
+	pointer = 12;
+	if (pdu_dmac_sync->fragmentation_flag) {
+		pdu_dmac_sync->number_of_sch_f_slots = bits_to_uint(bits+pointer, 4);
+		pointer = pointer + 4;
+	}
+	pdu_dmac_sync->frame_countdown = bits_to_uint(bits+pointer, 2);
+	pointer = pointer + 2;
+	pdu_dmac_sync->dest_address_type = bits_to_uint(bits+pointer, 2);
+	pointer = pointer + 2;
+	if (pdu_dmac_sync->dest_address_type != 2) {
+		pdu_dmac_sync->dest_address = bits_to_uint(bits+pointer, 24);
+		pointer = pointer + 24;
+	}
+
+	pdu_dmac_sync->src_address_type = bits_to_uint(bits+pointer, 2);
+	pointer = pointer + 2;
+	if (pdu_dmac_sync->src_address_type != 2) {
+		pdu_dmac_sync->src_address = bits_to_uint(bits+pointer, 24);
+		pointer = pointer + 24;
+	}
+
+	if (pdu_dmac_sync->communication_type < 2) {
+		pdu_dmac_sync->mni = bits_to_uint(bits+pointer, 24);
+		pointer = pointer + 24;
+	}
+
+	pdu_dmac_sync->message_type = bits_to_uint(bits+pointer, 5);
+	// pointer = pointer + 5;
+
+	switch(pdu_dmac_sync->message_type) {
+		case 8: //DM-SETUP
+			memcpy(pdu_dmac_sync->message_fields, bits+pointer+5, 21);
+			pdu_dmac_sync->message_fields_len = 21;
+			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer+26, 21);
+			pdu_dmac_sync->dm_sdu_len = 5;
+			break;
+	}
+
+	return pointer;
+
+}
+
+
+static void rx_dm_dpressync_sch_s(uint8_t *bits, struct tetra_dmo_pdu_dpres_sync *sync) {
+	sync->system_code = bits_to_uint(bits, 4);
+	sync->sync_pdu_type = bits_to_uint(bits+4, 2);
+	sync->communication_type = bits_to_uint(bits+6, 2);
+	sync->m_dmo_flag = bits_to_uint(bits+8, 1);
+	sync->twofreq_repeater_flag = bits_to_uint(bits+11, 1);
+	sync->repeater_operating_modes = bits_to_uint(bits+12, 2);
+	sync->spacing_of_uplink = bits_to_uint(bits+14, 6);
+	sync->masterslave_link_flag = bits_to_uint(bits+20, 1);
+	sync->channel_usage = bits_to_uint(bits+21, 2);
+	sync->channel_state = bits_to_uint(bits+23, 2);
+	sync->slot_number = bits_to_uint(bits+25, 2) + 1;
+	sync->frame_number = bits_to_uint(bits+27, 5);
+	sync->power_class = bits_to_uint(bits+32, 3);
+	sync->power_control_flag = bits_to_uint(bits+36, 1);
+	sync->frame_countdown = bits_to_uint(bits+37, 2);
+	sync->priority_level = bits_to_uint(bits+39, 2);
+	sync->dn232_dn233 = bits_to_uint(bits+47, 4);
+	sync->dt254 = bits_to_uint(bits+51, 3);
+	sync->dualwatch_sync_flag = bits_to_uint(bits+54, 1);
+
+}
+
+int rx_dm_dpressync_sch_h(uint8_t *bits, struct tetra_dmo_pdu_dpres_sync *sync) {
+
+	int pointer = 0;
+	sync->repgw_address = bits_to_uint(bits, 10);
+	sync->mni = bits_to_uint(bits+10, 24);
+	sync->validity_time_unit = bits_to_uint(bits+34, 2);
+	sync->number_of_validity_time_units = bits_to_uint(bits+36, 6);
+	sync->max_dmms_power_class = bits_to_uint(bits+42, 3);
+	sync->usage_restriction_type = bits_to_uint(bits+46, 4);
+
+	if (sync->usage_restriction_type >= 8) {
+		sync->sckn = bits_to_uint(bits+50, 5);
+		sync->edsi_urtc_initialization_value = bits_to_uint(bits+55, 19);
+	}
+
+	return pointer;
 
 }
 
@@ -687,68 +805,163 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 			fragmsgb->l2h=0;
 		}
 
+		uint8_t pdu_system_code = bits_to_uint(bits, 4);
+		uint8_t sync_pdu_type = bits_to_uint(bits+4, 2);
+		pdu_dmac_sync->sync_pdu_type = sync_pdu_type;
 
 		// should not we clear previous pdu_dmac_sync first?
-		pdu_dmac_sync->system_code = bits_to_uint(bits, 4);
-		pdu_dmac_sync->sync_pdu_type = bits_to_uint(bits+4, 2);
-		pdu_dmac_sync->communication_type = bits_to_uint(bits+6, 2);
-		if (pdu_dmac_sync->communication_type == 1 || pdu_dmac_sync->communication_type == 3) {
-			pdu_dmac_sync->masterslave_link_flag = bits_to_uint(bits+8, 1);
+		if (sync_pdu_type == 0) { //DMAC-SYNC PDU
+			rx_dm_dmacsync_sch_s(bits, pdu_dmac_sync);
+		} else {
+			rx_dm_dpressync_sch_s(bits, pdu_dpres_sync);
 		}
-		if (pdu_dmac_sync->communication_type == 2 || pdu_dmac_sync->communication_type == 3) {
-			pdu_dmac_sync->gateway_message_flag = bits_to_uint(bits+9, 1);
 
-		}
-		pdu_dmac_sync->ab_channel_usage = bits_to_uint(bits+10, 2);
-		pdu_dmac_sync->slot_number = bits_to_uint(bits+12, 2) + 1;
-		pdu_dmac_sync->frame_number = bits_to_uint(bits+14, 5);
-		pdu_dmac_sync->airint_encryption_state = bits_to_uint(bits+19, 2);
-		if (pdu_dmac_sync->airint_encryption_state>0) {
-			pdu_dmac_sync->time_variant_parameter = bits_to_uint(bits+21, 29);
-			pdu_dmac_sync->ksg_number = bits_to_uint(bits+51, 4);
-			pdu_dmac_sync->encryption_key_number = bits_to_uint(bits+55, 5);
-		}
 
 	} else { // tup->lchan == TETRA_LC_SCH_H
+		if (pdu_dmac_sync->sync_pdu_type == 0) {
+			pointer = rx_dm_dmacsync_sch_h(bits, pdu_dmac_sync);
 
-		if (pdu_dmac_sync->communication_type >0 ){
-			pdu_dmac_sync->repgw_address = bits_to_uint(bits, 10);
+			uint8_t mcc = (pdu_dmac_sync->mni >> 14);
+			uint8_t mnc = (pdu_dmac_sync->mni & 0x3ff);
+
+			printf("DMAC-SYNC PDU (%d): SCH/S - Comm %d, M/S %d, GW msg %d, AB %d, TN %d, FN %d, ENC %d \n", 
+					pdu_dmac_sync->sync_pdu_type, pdu_dmac_sync->communication_type, pdu_dmac_sync->masterslave_link_flag, pdu_dmac_sync->gateway_message_flag, 
+					pdu_dmac_sync->ab_channel_usage, pdu_dmac_sync->slot_number, pdu_dmac_sync->frame_number, pdu_dmac_sync->airint_encryption_state);
+			printf("  REPGW %d, Fill %d, Frag %d, num %d, FN cnt %d, dst-type %d, dst-addr %d, src-type %d, src %d, mni %d (MCC %d, MNC %d), msg-type %d \n",
+				pdu_dmac_sync->repgw_address, pdu_dmac_sync->fillbit_indication, pdu_dmac_sync->fragmentation_flag, pdu_dmac_sync->number_of_sch_f_slots, 
+				pdu_dmac_sync->frame_countdown, pdu_dmac_sync->dest_address_type, pdu_dmac_sync->dest_address, pdu_dmac_sync->src_address_type, 
+				pdu_dmac_sync->src_address, pdu_dmac_sync->mni, mcc, mnc, pdu_dmac_sync->message_type);
+
+
 		} else {
-			pdu_dmac_sync->repgw_address = 0;
-		}
-		pdu_dmac_sync->fillbit_indication = bits_to_uint(bits+10, 1);
-		pdu_dmac_sync->fragmentation_flag = bits_to_uint(bits+11, 1);
-		pointer = 12;
-		if (pdu_dmac_sync->fragmentation_flag) {
-			pdu_dmac_sync->number_of_sch_f_slots = bits_to_uint(bits+pointer, 4);
-			pointer = pointer + 4;
-		}
-		pdu_dmac_sync->frame_countdown = bits_to_uint(bits+pointer, 2);
-		pointer = pointer + 2;
-		pdu_dmac_sync->dest_address_type = bits_to_uint(bits+pointer, 2);
-		pointer = pointer + 2;
-		if (pdu_dmac_sync->dest_address_type != 2) {
-			pdu_dmac_sync->dest_address = bits_to_uint(bits+pointer, 24);
-			pointer = pointer + 24;
+			pointer = rx_dm_dpressync_sch_h(bits, pdu_dpres_sync);
+
+			printf("DPRES-SYNC PDU (%d): SCH/S - Comm: %d, M-DMO: %d, 2-freq rep: %d, rep. operating modes: %d, spacing: %d, M/S link: %d, ch. usage: %d, ch. state: %d \n" \
+			 "  TN: %d, FN: %d, powerclass: %d, power control: %d, frame countdown: %d, priority: %d, DN232/DN233: %d, DT254: %d, dualwatch sync: %d \n" \
+			 "SCH/H - REP addr: %d, DM-REP MNI: %d, Validity unit: %d, validity units: %d, DM-MS max power-class: %d, URT: %d \n", 
+				pdu_dpres_sync->sync_pdu_type, pdu_dpres_sync->communication_type, pdu_dpres_sync->m_dmo_flag, pdu_dpres_sync->twofreq_repeater_flag, 
+				pdu_dpres_sync->repeater_operating_modes, pdu_dpres_sync->spacing_of_uplink, pdu_dpres_sync->masterslave_link_flag, pdu_dpres_sync->channel_usage,
+				pdu_dpres_sync->channel_state, pdu_dpres_sync->slot_number, pdu_dpres_sync->frame_number, pdu_dpres_sync->power_control_flag, pdu_dpres_sync->power_control_flag,
+				pdu_dpres_sync->frame_countdown, pdu_dpres_sync->priority_level, pdu_dpres_sync->dn232_dn233, pdu_dpres_sync->dt254, pdu_dpres_sync->dualwatch_sync_flag,
+				pdu_dpres_sync->repgw_address, pdu_dpres_sync->mni, pdu_dpres_sync->validity_time_unit, pdu_dpres_sync->number_of_validity_time_units, 
+				pdu_dpres_sync->max_dmms_power_class, pdu_dpres_sync->usage_restriction_type);
+
 		}
 
-		pdu_dmac_sync->src_address_type = bits_to_uint(bits+pointer, 2);
-		pointer = pointer + 2;
-		if (pdu_dmac_sync->src_address_type != 2) {
-			pdu_dmac_sync->src_address = bits_to_uint(bits+pointer, 24);
-			pointer = pointer + 24;
-		}
 
-		if (pdu_dmac_sync->communication_type < 2) {
-			pdu_dmac_sync->mni = bits_to_uint(bits+pointer, 24);
-			pointer = pointer + 24;
-		}
+		// ready to repeat DM-MASTER DM-SETUP request
+		if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->communication_type == 1 && pdu_dmac_sync->fragmentation_flag == 0 && pdu_dmac_sync->message_type == 8 && pdu_dmac_sync->processed==false) {
+			uint8_t master_fcountdown = pdu_dmac_sync->frame_countdown;
+			uint8_t out_fn = (pdu_dmac_sync->frame_number+master_fcountdown) % 18;
+			uint8_t out_tn = 1;
 
-		pdu_dmac_sync->message_type = bits_to_uint(bits+pointer, 5);
-		// pointer = pointer + 5;
+			uint8_t dcc_rep = pdu_dmac_sync->repgw_address & 0x3f;
+			uint32_t dcc_srcaddr = pdu_dmac_sync->src_address & 0xffffff;;
+			uint32_t colour_code = (dcc_srcaddr) | (dcc_rep << 24); 
+
+			pdu_dmac_sync->processed = true;
+			printf("## we are gonna repeat - out starting at slave link FN: %d\n", out_fn);
+
+			for (int fn=0; fn<2; fn++) { // TODO - use DN232 constant
+
+				for (int tn=0; tn<4; tn++) {
+
+					struct tetra_dmvsap_prim *tdp;
+					struct dmv_unitdata_param *d_unitdata_param;
+					struct msgb *msg;
+
+					/* build DMAC-SYNC SCH/S part */
+					tdp = dmvsap_prim_alloc(PRIM_DMV_UNITDATA, PRIM_OP_REQUEST);
+					msg = tdp->oph.msg;
+					d_unitdata_param = &tdp->u.unitdata;
+					d_unitdata_param->colour_code = colour_code;
+					struct tetra_tdma_time *time = &d_unitdata_param->tdma_time;
+					time->fn = out_fn+fn;
+					time->tn = tn;
+					time->link = DM_LINK_SLAVE;
+
+					uint8_t pdu_sync_SCHS[8];		/* 60 bits */
+					uint8_t pdu_sync_SCHH[16];	    /* 124 bits */
+					uint8_t sb_type2[80];
+					uint8_t si_type2[140];
+
+					struct bitvec bv;
+					memset(&bv, 0, sizeof(bv));
+					bv.data = pdu_sync_SCHS;
+					bv.data_len = sizeof(pdu_sync_SCHS);
+
+					bitvec_set_uint(&bv, 13, 4);	/* System Code  */
+					bitvec_set_uint(&bv, 0, 2);	    /* Sync PDU type */
+					bitvec_set_uint(&bv, 1, 2);	    /* Communication Type */
+					bitvec_set_uint(&bv, 0, 1);	    /* Master/slave link flag */
+					bitvec_set_uint(&bv, 1, 1);	    /* Gateway generated message flag */
+					bitvec_set_uint(&bv, pdu_dmac_sync->ab_channel_usage, 2);	    /* A/B channel usage */
+					bitvec_set_uint(&bv, tn, 2);	/* Slot number */
+					bitvec_set_uint(&bv, out_fn+fn, 5);	/* Frame number */
+					bitvec_set_uint(&bv, pdu_dmac_sync->airint_encryption_state, 2);   /* Air interface encryption state */
+					bitvec_set_uint(&bv, 0, 39);	    /* Reserved, encryption not yet supported */
+
+					osmo_pbit2ubit(sb_type2, pdu_sync_SCHS, 60);
+
+					// printf("DMV-SAP SCH/S %s - ", osmo_ubit_dump(sb_type2, 60));
+					d_unitdata_param->lchan = TETRA_LC_SCH_S;
+					
+
+					msg->l1h = msgb_put(msg, 60);
+					memcpy(msg->l1h, sb_type2, 60);
+					rx_dmv_unitdata_req(tdp, tms);
+
+					/* build DMAC-SYNC SCH/H part */
+					tdp = dmvsap_prim_alloc(PRIM_DMV_UNITDATA, PRIM_OP_REQUEST);
+					msg = tdp->oph.msg;
+					d_unitdata_param = &tdp->u.unitdata;
+					d_unitdata_param->colour_code = colour_code;
+					time = &d_unitdata_param->tdma_time;
+					time->fn = out_fn+fn;
+					time->tn = tn;
+					time->link = DM_LINK_SLAVE;
+
+					memset(&bv, 0, sizeof(bv));
+					bv.data = pdu_sync_SCHH;
+					bv.data_len = sizeof(pdu_sync_SCHH);
+
+					bitvec_set_uint(&bv, pdu_dmac_sync->repgw_address, 10);	/* Repeater address */
+					bitvec_set_uint(&bv, pdu_dmac_sync->fillbit_indication, 1);	    /* Fillbit indication */
+					bitvec_set_uint(&bv, pdu_dmac_sync->fragmentation_flag, 1);	    /* Fragment flag */
+					bitvec_set_uint(&bv, 1-fn, 2);	    /* frame countdown */
+					bitvec_set_uint(&bv, pdu_dmac_sync->dest_address_type, 2);	    /* destination address type */
+					bitvec_set_uint(&bv, pdu_dmac_sync->dest_address, 24);	    /* destination address */
+					bitvec_set_uint(&bv, pdu_dmac_sync->src_address_type, 2);	    /* source address type */
+					bitvec_set_uint(&bv, pdu_dmac_sync->src_address, 24);	    /* source address */
+					bitvec_set_uint(&bv, pdu_dmac_sync->mni, 24);	/* MNI  */
+					bitvec_set_uint(&bv, pdu_dmac_sync->message_type, 5);	    /* Message type */
+					// bitvec_set_uint(&bv, pdu_dmac_sync->message_fields, pdu_dmac_sync->message_fields_len);	    /* Message dependent elements */
+					// bitvec_set_uint(&bv, pdu_dmac_sync->dm_sdu, pdu_dmac_sync->dm_sdu_len);	    /* DM-SDU */
+					bitvec_add_array(&bv, pdu_dmac_sync->message_fields, pdu_dmac_sync->message_fields_len, false, 8);
+					bitvec_add_array(&bv, pdu_dmac_sync->dm_sdu, pdu_dmac_sync->dm_sdu_len, false, 8);
+
+					d_unitdata_param->lchan = TETRA_LC_SCH_H;
+					osmo_pbit2ubit(si_type2, pdu_sync_SCHH, 124);
+
+					// printf("SCH/H - %s\n", osmo_ubit_dump(si_type2, 124));
+					msg->l1h = msgb_put(msg, 124);
+					memcpy(msg->l1h, si_type2, 124);
+					rx_dmv_unitdata_req(tdp, tms);
+
+				}
+
+			}
+		
+		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->frame_countdown == 0 && pdu_dmac_sync->slot_number == 3 && pdu_dmac_sync->message_type == 8 && pdu_dmac_sync->processed==true) {
+			pdu_dmac_sync->processed = false;
+			printf("DM-SETUP processed flag cleared!\n");
+
+		}
 
 		int slot = 0;
-		uint8_t fillbits_present=bits_to_uint(bits+10, 1); 
+		// uint8_t fillbits_present=bits_to_uint(bits+10, 1); 
+		uint8_t fillbits_present = pdu_dmac_sync->fillbit_indication;
+
 		int len=msgb_l1len(msg);
 
 		if (fragslots[slot].active) {
@@ -774,9 +987,10 @@ static int rx_dmv_unitdata_ind(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_
 	const char *pdu_name;
 	struct msgb *gsmtap_msg;
 
-	if (tup->lchan == TETRA_LC_SCH_S || tup->lchan == TETRA_LC_SCH_H)
+	if (tup->lchan == TETRA_LC_SCH_S || tup->lchan == TETRA_LC_SCH_H) {
 		pdu_name = "SYNC";
-	else {
+		tms->channel_state = DM_CHANNEL_S_MS_IDLE_OCCUPIED;
+	} else {
 		pdu_type = bits_to_uint(msg->l1h, 2);
 		pdu_name = tetra_get_dmacpdu_name(pdu_type);
 	}
@@ -801,14 +1015,8 @@ static int rx_dmv_unitdata_ind(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_
 
 	switch (tup->lchan) {
 	case TETRA_LC_SCH_S:
-		rx_dmo_signalling(dmvp, tms); //DMAC-SYNC SCH/S
-		break;
 	case TETRA_LC_SCH_H:
-		rx_dmo_signalling(dmvp, tms); //DMAC-SYNC SCH/H
-		if (pdu_dmac_sync->fragmentation_flag == 0) {
-			// start message parsing
-			// parse_dm_message(pdu_dmac_sync->message_type, dmvp);
-		}
+		rx_dmo_signalling(dmvp, tms); 
 		break;
 	case TETRA_LC_STCH:
 		if (pdu_type == TETRA_PDU_T_DMAC_DATA) {

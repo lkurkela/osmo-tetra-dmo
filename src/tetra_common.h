@@ -71,6 +71,7 @@ struct fragslot fragslots[FRAGSLOT_NR_SLOTS]; /* slots are 1-4 but sometimes  sl
 #include "tetra_tdma.h"
 struct tetra_phy_state {
 	struct tetra_tdma_time time;
+	void (*time_adjust_cb_func)(uint8_t, uint8_t); 
 };
 extern struct tetra_phy_state t_phy_state;
 

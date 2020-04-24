@@ -113,7 +113,6 @@ int tetra_burst_sync_in(struct tetra_rx_state *trs, uint8_t *bits, unsigned int 
 		} else {
 			/* we have successfully received (at least) one frame */
 			// tetra_tdma_time_add_tn(&t_phy_state.time, 1);
-			tetra_tdma_time_add_burst_delta(&t_phy_state.time, trs);
 
 			printf("\nBURST");
 			DEBUGP(": %s", osmo_ubit_dump(trs->bitbuf, TETRA_BITS_PER_TS));
@@ -159,6 +158,9 @@ int tetra_burst_sync_in(struct tetra_rx_state *trs, uint8_t *bits, unsigned int 
 			trs->bitbuf_start_bitnum += TETRA_BITS_PER_TS;
 			trs->next_frame_start_bitnum += TETRA_BITS_PER_TS;
 		}
+
+		tetra_tdma_time_add_burst_delta(&t_phy_state.time, trs);
+
 		break;
 
 	}

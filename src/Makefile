@@ -1,7 +1,8 @@
 CFLAGS=-g -Wall `pkg-config --cflags libosmocore 2> /dev/null` -I. -I../../suo/libsuo
 LDLIBS=`pkg-config --libs libosmocore 2> /dev/null` -losmocore -lzmq -lm -lpthread
 
-all: conv_enc_test crc_test tetra-rx tetra-rx-dmo float_to_bits tunctl tetra-dmo-rep
+# all: conv_enc_test crc_test tetra-rx tetra-rx-dmo float_to_bits tunctl tetra-dmo-rep
+all: conv_enc_test crc_test float_to_bits tunctl tetra-dmo-rep
 
 debug: CFLAGS := -lasan $(CFLAGS) -fsanitize=address -fno-omit-frame-pointer -g -O0
 debug: LDLIBS := -lasan $(LDLIBS)
@@ -20,8 +21,8 @@ float_to_bits: float_to_bits.o
 
 crc_test: crc_test.o tetra_common.o libosmo-tetra-mac.a
 
-tetra-rx: tetra-rx.o libosmo-tetra-phy.a libosmo-tetra-mac.a
-tetra-rx-dmo: tetra-rx-dmo.o libosmo-tetra-phy.a libosmo-tetra-mac.a
+# tetra-rx: tetra-rx.o libosmo-tetra-phy.a libosmo-tetra-mac.a
+# tetra-rx-dmo: tetra-rx-dmo.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 tetra-dmo-rep: tetra-dmo-rep.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 
 conv_enc_test: conv_enc_test.o testpdu.o libosmo-tetra-phy.a libosmo-tetra-mac.a

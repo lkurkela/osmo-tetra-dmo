@@ -34,8 +34,12 @@
 #include <zmq.h>
 #include "suo.h"
 
+#include <signal.h>
+
 void *tetra_tall_ctx;
 struct tetra_mac_state *tms;
+struct tetra_rx_state *trs;
+// struct tetra_phy_state t_phy_state;
 
 #define ENCODED_MAXLEN 0x900
 void *zmq_rx_socket;
@@ -48,16 +52,9 @@ void *zmq_tx_socket;
 #define DN232 1         // number of frames to transmit DM-SETUP (PRES) => 2
 #define DN233 1         // number of frames to transmit DSB heading a DM-SDS UDATA/DATA => 2
 #define DN253 2         // number of frames in with DM-REP transmits  the free-channel presence signal (2-4)
-#define DT254 1         // Presence signal every 2 multiframes
+#define DT254 2         // Presence signal every 2 multiframes
 
 #define swap16(x) ((x)<<8)|((x)>>8)
-
-
-/* pfft begins - not invented here */
-void tp_sap_udata_ind(enum tp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv) { }
-void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv) { }
-/* pfft ends */
-
 
 static const int8_t presence_signal_multiframe_count[8] = {
 	[0] = 0,
@@ -74,9 +71,13 @@ static const int8_t presence_signal_multiframe_count[8] = {
 struct timeslot {
     uint8_t fn;
     uint8_t tn;
-    uint64_t start_ts;  // start of timeslot in us
+    uint8_t slave_fn;
+    uint8_t slave_tn;
+    uint64_t start_ts;          // start of timeslot at host timezone in microseconds
+    uint64_t start_ts_modem;    // start of timeslot at modem timezone in nanoseconds
     uint16_t len;
-    uint8_t burst[512]; // burst bit-per-byte encoded 
+    uint8_t delayed;
+    uint8_t burst[512];         // burst bit-per-byte encoded 
 };
 
 // multiframe buffer, 18 frames with 4 timeslots = 72 timeslots
@@ -85,31 +86,94 @@ struct multiframe {
 };
 
 // global frame buffer to both threads
-struct multiframe frame_buf;
+struct multiframe frame_buf_master;
+// struct multiframe frame_buf_slave;
 
 // initialize the global framebuffer with timeslot numbers and timestamps
 void initialize_framebuffer(uint64_t base_time_ts)
 {
     uint64_t time_ts = base_time_ts; // microseconds
 
+    // master-rep buffer
     for (int i = 0; i<72; i++) {
-        struct timeslot *tn = &frame_buf.tn[i];
+        struct timeslot *tn = &frame_buf_master.tn[i];
+        tn->tn = (i%4) + 1;
+        tn->fn = floor( (float)i/4 ) + 1;
+        tn->slave_tn = ((i-3)%4) + 1;
+        tn->slave_fn = floor( (float)(i-3)/4 ) + 1;
+        tn->len = 0;
+        tn->delayed = 0;
+        time_ts = time_ts + (85000/6);
+        tn->start_ts = time_ts;
+    }
+
+    /*
+    time_ts = base_time_ts + 3*(85000/6);
+    for (int i = 0; i<72; i++) {
+        struct timeslot *tn = &frame_buf_slave.tn[i];
         tn->tn = (i%4) + 1;
         tn->fn = floor( (float)i/4 ) + 1;
         tn->len = 0;
         time_ts = time_ts + (85000/6);
         tn->start_ts = time_ts;
     }
+    */
+
 };
 
 // set next start timestamp of a timeslot for next round
 void reprime_timeslot(uint8_t slotnum) {
-    struct timeslot *tn = &frame_buf.tn[slotnum];
+    struct timeslot *tn = &frame_buf_master.tn[slotnum];
     uint64_t old_start = tn->start_ts;
     uint64_t multiframe_duration = 3060000/3;
     tn->start_ts = old_start + multiframe_duration;
-    tn->len = 0;
+    if (tn->delayed>0) {
+        tn->delayed--;
+    } else {
+        tn->len = 0;
+    }
+
 };
+
+/*
+void reprime_timeslot_slave(uint8_t slotnum) {
+    uint64_t multiframe_duration = 3060000/3;
+    struct timeslot *tn = &frame_buf_slave.tn[slotnum];
+    tn->start_ts += multiframe_duration;
+    tn->len = 0;
+
+};
+*/
+
+void resync_timeslots(uint8_t fn, uint8_t tn) {
+    uint32_t duration_tn = 42500/3; // timeslot duration in microseconds
+    uint64_t host = trs->host_burst_rx_timestamp; // end of burst in microseconds
+    host -= duration_tn;
+    uint64_t modem = trs->modem_burst_rx_timestamp; // end of burst in nanoseconds
+    modem -= (duration_tn*1000);
+
+    uint8_t master_tn = (fn*4+tn)-5;
+    // uint8_t slave_tn = (master_tn-3)%72;
+
+    printf("## Resync tx-buffer TS's from M%02d/%d to host-ts: %ld and modem-ts %ld\n", fn, tn, host, modem);
+
+    for(int i=0; i<72; i++) {
+        master_tn = (master_tn + i)%72;
+        // slave_tn = (slave_tn + i)%72;
+        struct timeslot *master_slot = &frame_buf_master.tn[master_tn];
+        // struct timeslot *slave_slot = &frame_buf_master.tn[slave_tn];
+        master_slot->start_ts = host;
+        master_slot->start_ts_modem = modem;
+        // slave_slot->start_ts = host;
+        // slave_slot->start_ts_modem = modem;
+
+        host += duration_tn;
+        modem += (duration_tn*1000);
+    }
+    
+
+}
+
 
 // common function with tetra-rx-dmo so should be moved to common library
 int floats_to_bits(const struct frame *in, struct frame *out, size_t maxlen) 
@@ -131,8 +195,9 @@ int floats_to_bits(const struct frame *in, struct frame *out, size_t maxlen)
 		}
 	}
 
-	memcpy(out->data, buffy_out+2, len-2);
-	out->m.len = len-2;
+	// memcpy(out->data, buffy_out+2, len-2);
+	// out->m.len = len-2;
+	memcpy(out->data, buffy_out, len);
 	return 0;
 }
 
@@ -241,6 +306,7 @@ void build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint
 
 	/* SYNC SCH/S */
 	cur += osmo_pbit2ubit(sb_type2, pdu_sync_SCHS, 60);
+    printf("DPRESS-SYNC SCH/S %s - ", osmo_ubit_dump(sb_type2, 60));
 
 	crc = ~crc16_ccitt_bits(sb_type2, 60);
 	crc = swap16(crc);
@@ -276,6 +342,8 @@ void build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint
 	memset(si_type2, 0, sizeof(si_type2));
 	cur = si_type2;
 	cur += osmo_pbit2ubit(si_type2, pdu_sync_SCHH, 124);
+
+    printf("DPRES-SYNC SCH/H - %s\n", osmo_ubit_dump(si_type2, 124));
 
 	/* Run it through CRC16-CCITT */
 	crc = ~crc16_ccitt_bits(si_type2, 124);
@@ -313,6 +381,22 @@ void build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint
 
 }
 
+
+void dp_sap_udata_req(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, struct tetra_tdma_time tdma_time)
+{
+    uint8_t slotnum = (4*(tdma_time.fn-1))+tdma_time.tn;
+    if (tdma_time.link == DM_LINK_SLAVE) {
+        slotnum = (slotnum+3) % 72;
+    }
+    printf("BURST OUT - scheduled to buffer slot %d/%d (%d)\n", tdma_time.fn, tdma_time.tn, slotnum);
+    struct timeslot *burst_slot;
+    burst_slot = &frame_buf_master.tn[slotnum];
+    memcpy(burst_slot->burst, bits, len);
+    burst_slot->len = 510;
+    
+
+}
+
 // rx thread
 void *rep_rx_thread()
 {
@@ -320,7 +404,8 @@ void *rep_rx_thread()
     // setup ZMQ RX
 	void *zmq_context = zmq_ctx_new();
     zmq_rx_socket = zmq_socket(zmq_context, ZMQ_SUB);
-    int connret = zmq_connect(zmq_rx_socket, "tcp://localhost:43300");
+    //int connret = zmq_connect(zmq_rx_socket, "tcp://localhost:43300");
+    int connret = zmq_connect(zmq_rx_socket, "ipc:///tmp/dpsk-modem-rx");
 	zmq_setsockopt(zmq_rx_socket, ZMQ_SUBSCRIBE, "", 0);
 
 	while (1) {
@@ -336,7 +421,10 @@ void *rep_rx_thread()
 			char encoded_buf[sizeof(struct frame) + ENCODED_MAXLEN];
 			struct frame *encoded = (struct frame *)encoded_buf;
 			int rc = floats_to_bits(zmq_msg_data(&input_msg), encoded, ENCODED_MAXLEN);
-            printf("RX burst: %s\n", osmo_ubit_dump(encoded->data, encoded->m.len));
+            trs->modem_burst_rx_timestamp = encoded->m.time;
+            trs->host_burst_rx_timestamp = now_us;
+            // printf("RX burst: %s\n", osmo_ubit_dump(encoded->data, encoded->m.len));
+            tetra_burst_sync_in(trs, encoded->data, encoded->m.len);
 
 		} else {
             // no burst in buffer
@@ -363,13 +451,17 @@ void rep_tx_thread()
 {
     unsigned int multiframe_counter = 0;
     uint8_t multiframes_since_last_presence = 0;
-    unsigned int pointer_tn = 0;
+    unsigned int pointer_tn = 3;
+    unsigned int pointer_slave_tn = 0;
     unsigned int counter = 0;
    	struct timeval now;
 
+    struct tetra_tdma_time *phy_time = &t_phy_state.time;
+
    	void *zmq_context = zmq_ctx_new();
     zmq_tx_socket = zmq_socket(zmq_context, ZMQ_PUB);
-    int connret = zmq_connect(zmq_tx_socket, "tcp://localhost:43301");
+    // int connret = zmq_connect(zmq_tx_socket, "tcp://localhost:43301");
+    int connret = zmq_connect(zmq_tx_socket, "ipc:///tmp/dpsk-modem-tx");
 
 
     gettimeofday(&now, NULL);
@@ -378,20 +470,36 @@ void rep_tx_thread()
 
     initialize_framebuffer(one_sec);
 
-    struct timeslot current_ts = frame_buf.tn[pointer_tn];
-    struct timeslot next_ts = frame_buf.tn[pointer_tn+1];
+    struct timeslot current_ts = frame_buf_master.tn[pointer_tn];
+    struct timeslot next_ts = frame_buf_master.tn[pointer_tn+1];
+    // struct timeslot current_slave_ts = frame_buf_slave.tn[pointer_slave_tn];
+    // struct timeslot next_slave_ts = frame_buf_slave.tn[pointer_tn+1];
 
     while (1) { 
         gettimeofday(&now, NULL);
         now_us = (double)now.tv_sec*1.0e6+(double)now.tv_usec;
 
+        // just in case time has been resyncronized while in the loop
+        pointer_tn = 4*(t_phy_state.time.fn-1) + (t_phy_state.time.tn-1);
+        uint8_t pointer_next_tn = (pointer_tn+1)%72;
+        next_ts = frame_buf_master.tn[pointer_next_tn];
+
         if (now_us > next_ts.start_ts){
+            tetra_tdma_time_add_tn(phy_time, 1);
             current_ts = next_ts;
+            pointer_tn = 4*(t_phy_state.time.fn-1) + (t_phy_state.time.tn-1);
+            uint8_t pointer_next_tn = (pointer_tn+1)%72;
+            // current_slave_ts = next_slave_ts;
             
-            if (current_ts.len > 0) {
-                printf("[TX-%ld] [%d] %02d/%02d/%d - start ts: %ld, len: %d, burst: %s\n", now_us, tms->channel_state, multiframe_counter,current_ts.fn, current_ts.tn, current_ts.start_ts, current_ts.len, osmo_ubit_dump(current_ts.burst, current_ts.len));
-            }
-            if (current_ts.len > 0) {
+            // if (current_ts.len > 0) {
+                printf("\n[TX-%ld] [%d - %02d/%d] MASTER %02d/%02d/%d - SLAVE %02d/%02d/%d - start ts: %ld / %ld, delayed: %d, len: %d", 
+                    now_us, tms->channel_state, phy_time->fn, phy_time->tn,
+                    multiframe_counter, current_ts.fn, current_ts.tn, multiframe_counter, current_ts.slave_fn, current_ts.slave_tn,
+                    current_ts.start_ts, current_ts.start_ts_modem, current_ts.delayed, current_ts.len);
+            // }
+            if (current_ts.len > 0 && current_ts.delayed == 0) {
+
+                printf(", burst: %s ", osmo_ubit_dump(current_ts.burst, current_ts.len));
                 // send burst to modem
                 char encoded_buf[sizeof(struct frame) + ENCODED_MAXLEN];
 			    struct frame *encoded = (struct frame *)encoded_buf;
@@ -403,9 +511,7 @@ void rep_tx_thread()
 
            		zmq_msg_t input_msg;
     		    zmq_msg_init_size(&input_msg, sizeof(struct frame)+encoded->m.len);
-
                 int rc = bits_to_floats(encoded, zmq_msg_data(&input_msg), ENCODED_MAXLEN);
-
                 // rc = zmq_send(zmq_tx_socket, encoded, sizeof(struct frame)+encoded->m.len, ZMQ_DONTWAIT);
                 rc = zmq_msg_send(&input_msg, zmq_tx_socket, ZMQ_DONTWAIT);
                 // printf("ZMQSEND: %d", rc);
@@ -413,12 +519,15 @@ void rep_tx_thread()
             }
             reprime_timeslot(pointer_tn);
 
-
             counter++;
-            pointer_tn = counter%72;
-            next_ts = frame_buf.tn[pointer_tn];
+            // pointer_tn = counter%72;
+            pointer_tn = 4*(t_phy_state.time.fn-1) + (t_phy_state.time.tn-1);
+            pointer_next_tn = (pointer_tn+1)%72;
+            // pointer_slave_tn = (pointer_tn-2)%72;
+            next_ts = frame_buf_master.tn[pointer_next_tn];
+            // next_slave_ts = frame_buf_slave.tn[pointer_slave_tn];
 
-            // when rolling over to next multiframe
+            // when rolling over to next multiframe IN SLAVE
             if (next_ts.fn < current_ts.fn) {
                 multiframe_counter++;
                 if (tms->channel_state == DM_CHANNEL_S_MS_IDLE_FREE) {
@@ -426,31 +535,26 @@ void rep_tx_thread()
                         // printf("presence signal away!\n");
                         multiframes_since_last_presence = 0;
 
-                        for (int i = DN253; i>0; i--) { // repeat for N frames
-                            uint8_t frame_num = 18-i;
+                        uint8_t send_count = DN253*4;
+
+                        for (int i = send_count; i>0; i--) { // repeat for N frames
                             struct timeslot *burst_slot;
+                            uint8_t slot_num = (75-i) % 72;
+                            uint8_t countdown = (send_count-1) / 4;
 
-                            burst_slot = &frame_buf.tn[4*frame_num];
-                            build_pdu_dpress_sync(burst_slot->fn, burst_slot->tn, i-1, burst_slot->burst);
+                            burst_slot = &frame_buf_master.tn[slot_num];
+                            build_pdu_dpress_sync(burst_slot->fn, burst_slot->tn, countdown, burst_slot->burst);
                             burst_slot->len = 510;
 
-                            burst_slot = &frame_buf.tn[4*frame_num+1];
-                            build_pdu_dpress_sync(burst_slot->fn, burst_slot->tn, i-1, burst_slot->burst);
-                            burst_slot->len = 510;
+                            if (i<4) {
+                                burst_slot->delayed=1;
+                            }
 
-                            burst_slot = &frame_buf.tn[4*frame_num+2];
-                            build_pdu_dpress_sync(burst_slot->fn, burst_slot->tn, i-1, burst_slot->burst);
-                            burst_slot->len = 510;
-
-                            burst_slot = &frame_buf.tn[4*frame_num+3];
-                            build_pdu_dpress_sync(burst_slot->fn, burst_slot->tn, i-1, burst_slot->burst);
-                            burst_slot->len = 510;
 
                         }
                     }
 
                 }
-
             }
 
         }
@@ -458,6 +562,11 @@ void rep_tx_thread()
 
 };
 
+void catch_alarm(int sig) {
+    struct tetra_tdma_time *phy_time = &t_phy_state.time;
+    printf("  ## timer alarm! MAC PHY time: %02d/%d ##\n", phy_time->fn, phy_time->tn);
+    signal(sig, catch_alarm);
+}
 
 int main(int argc, char **argv)
 {
@@ -469,10 +578,36 @@ int main(int argc, char **argv)
 	tetra_mac_state_init(tms);
 	tms->infra_mode = TETRA_INFRA_DMO; 
 
+	trs = talloc_zero(tetra_tall_ctx, struct tetra_rx_state);
+	trs->burst_cb_priv = tms;
+
+    t_phy_state.time.fn=1;
+    t_phy_state.time.tn=1;
+    t_phy_state.time_adjust_cb_func = resync_timeslots;
+
+   	// initialize fragmentation slots
+	memset((void *)&fragslots,0,sizeof(struct fragslot)*FRAGSLOT_NR_SLOTS); 
+	char desc[]="slot \0";
+	for (int k=0;k<FRAGSLOT_NR_SLOTS;k++) {
+		desc[4]='0'+k;
+		fragslots[k].msgb=msgb_alloc(8192, desc);
+		msgb_reset(fragslots[k].msgb);
+	}
+
     gettimeofday(&now, NULL);
     uint64_t now_us = (double)now.tv_sec*1.0e6+(double)now.tv_usec;
     tms->channel_state_last_chg=now_us;
     tms->channel_state=DM_CHANNEL_S_MS_IDLE_UNKNOWN;
+
+    signal(SIGALRM, catch_alarm);
+    struct itimerval timer_new;
+    timer_new.it_interval.tv_usec = 42500/3;
+    timer_new.it_interval.tv_sec = 0;
+    timer_new.it_value.tv_sec = 1;
+    timer_new.it_value.tv_usec = 0;
+
+    setitimer(ITIMER_REAL, &timer_new, NULL);
+
 
     printf("## TETRA Type 1A DM-REP ##\n");
 
