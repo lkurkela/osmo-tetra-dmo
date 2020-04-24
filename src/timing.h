@@ -3,8 +3,26 @@
 
 #include <stdint.h>
 
+#define TIMING_SLOTS 4320
+
 struct timing_state {
-	// TODO
+	// Parameter: length of a slot
+	uint64_t slot_time;
+	// Parameter: how long beforehand a burst is produced
+	int64_t ahead_time;
+
+	// Next transmission slot
+	unsigned tx_slot; // Combined slot number, counting from 0 to 4319
+	uint64_t tx_time;
+};
+
+struct timing_slot {
+	uint64_t time;    // Timestamp
+	int64_t  diff;    // For RX: Time difference from expected timestamp
+	unsigned char tn; // Timeslot Number (1 to 4)
+	unsigned char fn; // TDMA Frame Number (1 to 18)
+	unsigned char mn; // TDMA Multiframe Number (1 to 60)
+	unsigned char hn; // TDMA Hyperframe Number?
 };
 
 /* Allocate and initialize a timing state.
