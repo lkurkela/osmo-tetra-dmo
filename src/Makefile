@@ -25,7 +25,7 @@ crc_test: crc_test.o tetra_common.o libosmo-tetra-mac.a
 # tetra-rx-dmo: tetra-rx-dmo.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 tetra-dmo-rep: tetra-dmo-rep.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 
-tetra-main: tetra-main.o timing.o libosmo-tetra-phy.a libosmo-tetra-mac.a
+tetra-main: tetra-main.o timing.o slotter.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 
 conv_enc_test: conv_enc_test.o testpdu.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 

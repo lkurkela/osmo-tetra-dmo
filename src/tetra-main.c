@@ -2,9 +2,11 @@
 #include <zmq.h>
 #include "suo.h"
 #include "timing.h"
+#include "slotter.h"
 
 void *zmq_context;
 struct timing_state *timing1;
+struct slotter_state *slotter1;
 
 #define BURST_MAXBITS 600
 struct burst_bits {
@@ -17,6 +19,7 @@ int main(void)
 	void *zmq_rx_socket, *zmq_tx_socket;
 	zmq_context = zmq_ctx_new();
 
+	slotter1 = slotter_init();
 	timing1 = timing_init();
 
 	zmq_rx_socket = zmq_socket(zmq_context, ZMQ_SUB);

@@ -1,12 +1,16 @@
 #include "timing.h"
+#include "slotter.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+
+struct slotter_state *slotter1;
 
 struct timing_state *timing_init()
 {
 	struct timing_state *s;
 	s = calloc(1, sizeof(*s));
+	s->slotter = slotter1;
 
 	s->slot_time = 1e9 * 255 / 18000;
 	s->ahead_time = 12.5e6;
@@ -29,17 +33,14 @@ int timing_rx_burst(struct timing_state *s, const uint8_t *bits, int len, uint64
 
 	struct timing_slot tslot = {
 		.time = ts,
-		.diff = td_tx - intdiff * s->slot_time,
+		.diff = td_tx - (int64_t)intdiff * s->slot_time,
 		.tn =  (rx_slot % 4)       + 1,
 		.fn = ((rx_slot / 4) % 18) + 1,
 		.mn =  (rx_slot / (4*18))  + 1,
 		.hn = 0
 	};
 
-	printf("RX slot: %2u %2u %2u, diff %10ld ns\n", tslot.tn, tslot.fn, tslot.mn, tslot.diff);
-
-	// TODO
-	//slotted_rx_burst(s->slotted, bits, len, &tslot);
+	slotter_rx_burst(s->slotter, bits, len, &tslot);
 
 	return 0;
 }
@@ -51,7 +52,7 @@ int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t 
 	uint64_t tnow = *ts;
 	if (s->tx_time == 0) {
 		// Initialize timing on first tick
-		s->tx_time = tnow;
+		s->tx_time = tnow + s->ahead_time + s->slot_time;
 	}
 
 	const uint64_t tx_time = s->tx_time;
@@ -68,10 +69,8 @@ int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t 
 			.hn = 0
 		};
 
-		printf("TX slot: %2u %2u %2u\n", tslot.tn, tslot.fn, tslot.mn);
-
-		// TODO
-		//retlen = slotted_tx_burst(s->slotted, bits, maxlen, &tslot);
+		retlen = slotter_tx_burst(s->slotter, bits, maxlen, &tslot);
+		*ts = tx_time;
 
 		// Go to the next slot
 		s->tx_time = tx_time + s->slot_time;
@@ -81,4 +80,23 @@ int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t 
 }
 
 
-// TODO: function to synchronize TX counters to a received burst
+int timing_resync(struct timing_state *s, struct timing_slot *slot)
+{
+	unsigned next_slot =
+		18 * 4 * (slot->mn - 1) +
+		     4 * (slot->fn - 1) +
+		         (slot->tn - 1);
+	uint64_t next_time = slot->time;
+
+	/* Find the first slot that doesn't cause tx_time to jump backwards */
+	const int tx_time = s->tx_time;
+	do {
+		// Go to the next slot
+		next_time += s->slot_time;
+		next_slot = (next_slot + 1) % TIMING_SLOTS;
+	} while ((int64_t)(next_time - tx_time) < 0);
+
+	s->tx_time = next_time;
+	s->tx_slot = next_slot;
+	return 0;
+}

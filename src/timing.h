@@ -1,19 +1,23 @@
-#ifndef OSMOTETRA_TIMING_H
-#define OSMOTETRA_TIMING_H
+#ifndef TETRA_TIMING_H
+#define TETRA_TIMING_H
 
 #include <stdint.h>
 
 #define TIMING_SLOTS 4320
 
+struct slotter_state;
+
 struct timing_state {
+	struct slotter_state *slotter;
+
 	// Parameter: length of a slot
 	uint64_t slot_time;
 	// Parameter: how long beforehand a burst is produced
 	int64_t ahead_time;
 
 	// Next transmission slot
-	unsigned tx_slot; // Combined slot number, counting from 0 to 4319
 	uint64_t tx_time;
+	unsigned tx_slot; // Combined slot number, counting from 0 to 4319
 };
 
 struct timing_slot {
@@ -42,5 +46,8 @@ int timing_rx_burst(struct timing_state *s, const uint8_t *bits, int len, uint64
  * Timestamp of the burst is returned in *ts.
  * The current time of the modulator is given in *ts. */
 int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t *ts);
+
+/* Resynchronize time counters. */
+int timing_resync(struct timing_state *s, struct timing_slot *slot);
 
 #endif
