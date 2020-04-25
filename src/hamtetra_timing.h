@@ -1,5 +1,5 @@
-#ifndef TETRA_TIMING_H
-#define TETRA_TIMING_H
+#ifndef HAMTETRA_TIMING_H
+#define HAMTETRA_TIMING_H
 
 #include <stdint.h>
 
@@ -45,8 +45,13 @@ struct timing_state *timing_init();
 int timing_rx_burst(struct timing_state *s, const uint8_t *bits, int len, uint64_t ts);
 
 /* Produce a burst to be transmitted in near future.
+ *
+ * The function is regularly called to check whether
+ * it's the time to produce a transmit burst.
+ *
  * Return value is the number of bits in the burst,
  * -1 if there is no burst to transmit at the moment.
+ *
  * Timestamp of the burst is returned in *ts.
  * The current time of the modulator is given in *ts. */
 int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t *ts);

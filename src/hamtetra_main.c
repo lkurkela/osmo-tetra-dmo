@@ -1,8 +1,12 @@
+/* Main loop to communicate with the modem.
+ * Passes received bursts to timing_rx_burst
+ * and polls timing_tx_burst for transmit bursts. */
+
 #include <assert.h>
 #include <zmq.h>
 #include "suo.h"
-#include "timing.h"
-#include "slotter.h"
+#include "hamtetra_timing.h"
+#include "hamtetra_slotter.h"
 
 void *zmq_context;
 struct timing_state *timing1;
@@ -21,6 +25,8 @@ int main(void)
 
 	slotter1 = slotter_init();
 	timing1 = timing_init();
+	timing1->slotter = slotter1;
+	slotter1->timing = timing1;
 
 	zmq_rx_socket = zmq_socket(zmq_context, ZMQ_SUB);
 	/* Subscribe to both received frames and transmitter ticks */
@@ -69,6 +75,7 @@ int main(void)
 				zmq_send(zmq_tx_socket, &tx_msg, sizeof(struct metadata) + len, 0);
 			}
 		}
+		fflush(stdout);
 	}
 	return 0;
 }

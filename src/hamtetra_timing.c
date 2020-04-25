@@ -1,18 +1,18 @@
-#include "timing.h"
-#include "slotter.h"
+/* Convert between burst timestamps and timeslot numbers.
+ * Handle timing of producing transmit bursts. */
+
+#include "hamtetra_timing.h"
+#include "hamtetra_slotter.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-
-struct slotter_state *slotter1;
 
 struct timing_state *timing_init()
 {
 	struct timing_state *s;
 	s = calloc(1, sizeof(*s));
-	s->slotter = slotter1;
 
-	s->slot_time = 1e9 * 255 / 18000;
+	s->slot_time = 1e9 * 255.0 / 18000.0 + 0.5;
 	s->ahead_time = 12.5e6;
 
 	return s;
@@ -21,7 +21,7 @@ struct timing_state *timing_init()
 
 int timing_rx_burst(struct timing_state *s, const uint8_t *bits, int len, uint64_t ts)
 {
-	//printf("%20lu: RX\n", ts);
+	//printf("RX %20lu %20lu\n", ts, s->tx_time);
 
 	// Find the nearest timeslot by comparing to the transmit counters
 	int64_t td_tx = ts - s->tx_time;
@@ -90,12 +90,17 @@ int timing_resync(struct timing_state *s, struct timing_slot *slot)
 
 	/* Find the first slot that doesn't cause tx_time to jump backwards */
 	const uint64_t tx_time = s->tx_time;
+	unsigned i = 0;
 	do {
 		// Go to the next slot
 		next_time += s->slot_time;
 		next_slot = (next_slot + 1) % TIMING_SLOTS;
+		if (++i >= 100) {
+			printf("Something is wrong with timestamps and things may be in a weird state\n");
+			break;
+		}
 	} while ((int64_t)(next_time - tx_time) < 0);
-	printf("Skipped to %d\n", next_slot);
+	printf("Resynchronizing, skipped %u\n", i);
 
 	s->tx_time = next_time;
 	s->tx_slot = next_slot;
