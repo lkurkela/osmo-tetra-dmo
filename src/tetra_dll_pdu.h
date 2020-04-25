@@ -58,7 +58,7 @@ struct tetra_dmo_pdu_dmac_sync {
     uint8_t message_type;
 	uint8_t message_fields[128]; // message dependent fields;
 	uint8_t message_fields_len;
-	uint8_t *dm_sdu[128]; //message 
+	uint8_t dm_sdu[128]; //message 
 	uint8_t dm_sdu_len;
 	bool processed;
 };

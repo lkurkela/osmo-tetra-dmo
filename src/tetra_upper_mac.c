@@ -708,13 +708,13 @@ int rx_dm_dmacsync_sch_h(uint8_t *bits, struct tetra_dmo_pdu_dmac_sync *sync) {
 	}
 
 	pdu_dmac_sync->message_type = bits_to_uint(bits+pointer, 5);
-	// pointer = pointer + 5;
+	pointer = pointer + 5;
 
 	switch(pdu_dmac_sync->message_type) {
 		case 8: //DM-SETUP
-			memcpy(pdu_dmac_sync->message_fields, bits+pointer+5, 21);
+			memcpy(pdu_dmac_sync->message_fields, bits+pointer, 21);
 			pdu_dmac_sync->message_fields_len = 21;
-			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer+26, 21);
+			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer+21, 5);
 			pdu_dmac_sync->dm_sdu_len = 5;
 			break;
 	}
@@ -903,7 +903,7 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 
 					osmo_pbit2ubit(sb_type2, pdu_sync_SCHS, 60);
 
-					// printf("DMV-SAP SCH/S %s - ", osmo_ubit_dump(sb_type2, 60));
+					printf("DMV-SAP SCH/S %s - ", osmo_ubit_dump(sb_type2, 60));
 					d_unitdata_param->lchan = TETRA_LC_SCH_S;
 					
 
@@ -936,14 +936,19 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 					bitvec_set_uint(&bv, pdu_dmac_sync->mni, 24);	/* MNI  */
 					bitvec_set_uint(&bv, pdu_dmac_sync->message_type, 5);	    /* Message type */
 					// bitvec_set_uint(&bv, pdu_dmac_sync->message_fields, pdu_dmac_sync->message_fields_len);	    /* Message dependent elements */
+					// bitvec_add_array(&bv, pdu_dmac_sync->message_fields, pdu_dmac_sync->message_fields_len, false, 8);
+					for (int i=0; i<pdu_dmac_sync->message_fields_len; i++) {
+						bitvec_set_uint(&bv, pdu_dmac_sync->message_fields[i], 1);
+					}
 					// bitvec_set_uint(&bv, pdu_dmac_sync->dm_sdu, pdu_dmac_sync->dm_sdu_len);	    /* DM-SDU */
-					bitvec_add_array(&bv, pdu_dmac_sync->message_fields, pdu_dmac_sync->message_fields_len, false, 8);
-					bitvec_add_array(&bv, pdu_dmac_sync->dm_sdu, pdu_dmac_sync->dm_sdu_len, false, 8);
-
+					// bitvec_add_array(&bv, pdu_dmac_sync->dm_sdu, pdu_dmac_sync->dm_sdu_len, false, 8);
+					for (int i=0; i<pdu_dmac_sync->dm_sdu_len; i++) {
+						bitvec_set_uint(&bv, pdu_dmac_sync->dm_sdu[i], 1);
+					}
 					d_unitdata_param->lchan = TETRA_LC_SCH_H;
 					osmo_pbit2ubit(si_type2, pdu_sync_SCHH, 124);
 
-					// printf("SCH/H - %s\n", osmo_ubit_dump(si_type2, 124));
+					printf(" SCH/H - %s\n", osmo_ubit_dump(si_type2, 124));
 					msg->l1h = msgb_put(msg, 124);
 					memcpy(msg->l1h, si_type2, 124);
 					rx_dmv_unitdata_req(tdp, tms);

@@ -220,9 +220,11 @@ int build_encoded_block_sch(enum dp_sap_data_type type, uint8_t *in, uint8_t *ou
 	cur = type2;
 
 	/* SYNC SCH/S */
-	cur += osmo_pbit2ubit(type2, in, tbp->type1_bits);
+	// cur += osmo_pbit2ubit(type2, in, tbp->type1_bits);
+	memcpy(type2, in, tbp->type1_bits);
+	cur += tbp->type1_bits;
 
-    printf("SCH/S type1: %s ", osmo_ubit_dump(type2, tbp->type1_bits));
+    printf("SCH type1: %s ", osmo_ubit_dump(type2, tbp->type1_bits));
 
 	crc = ~crc16_ccitt_bits(type2, tbp->type1_bits);
 	crc = swap16(crc);
@@ -250,7 +252,7 @@ int build_encoded_block_sch(enum dp_sap_data_type type, uint8_t *in, uint8_t *ou
 	/* Run scrambling (all-zero): type-5 bits */
 	memcpy(type5, type4, tbp->type345_bits);
 	tetra_scramb_bits(SCRAMB_INIT, type5, tbp->type345_bits);
-	// printf("SYNC type5: %s\n", osmo_ubit_dump(type5, tbp->type345_bits));
+	printf("SYNC type5: %s\n", osmo_ubit_dump(type5, tbp->type345_bits));
 
 	memcpy(out, type5, tbp->type345_bits);
 
@@ -699,7 +701,7 @@ int rx_dmv_unitdata_req(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_state *
 		build_encoded_block_sch(DPSAP_T_SCH_S, msg->l1h, sch_burst->block1);		
 
 	} else if (tup->lchan == TETRA_LC_SCH_H) {
-		build_encoded_block_sch(DPSAP_T_SCH_S, msg->l1h, sch_burst->block2);
+		build_encoded_block_sch(DPSAP_T_SCH_H, msg->l1h, sch_burst->block2);
 		build_dm_sync_burst(burst, sch_burst->block1, sch_burst->block2); 
 		printf("SYNC burst: %s\n", osmo_ubit_dump(burst, 255*2));
 		dp_sap_udata_req(DPSAP_T_SCH_H, burst, 510, tup->tdma_time);				
