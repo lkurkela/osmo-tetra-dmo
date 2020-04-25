@@ -37,7 +37,7 @@
 #include <signal.h>
 
 void *tetra_tall_ctx;
-struct tetra_mac_state *tms;
+//struct tetra_mac_state *tms; // Moved to struct slotter_state, is that a good idea or not?
 struct tetra_rx_state *trs;
 // struct tetra_phy_state t_phy_state;
 
@@ -146,6 +146,8 @@ void reprime_timeslot_slave(uint8_t slotnum) {
 */
 
 void resync_timeslots(uint8_t fn, uint8_t tn) {
+    printf("TODO: make resync_timeslots call timing_resync or something\n");
+#if 0
     uint32_t duration_tn = 42500/3; // timeslot duration in microseconds
     uint64_t host = trs->host_burst_rx_timestamp; // end of burst in microseconds
     host -= duration_tn;
@@ -170,11 +172,12 @@ void resync_timeslots(uint8_t fn, uint8_t tn) {
         host += duration_tn;
         modem += (duration_tn*1000);
     }
-    
-
+#endif
 }
 
 
+// not used anymore
+#if 0
 // common function with tetra-rx-dmo so should be moved to common library
 int floats_to_bits(const struct frame *in, struct frame *out, size_t maxlen) 
 {
@@ -224,10 +227,11 @@ int bits_to_floats(const struct frame *in, struct frame *out, size_t maxlen)
 	out->m.len = len;
 	return 0;
 }
+#endif
 
 
 
-int build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out) 
+int build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out)
 {
     uint8_t pdu_sync_SCHS[8];		/* 60 bits */
     uint8_t pdu_sync_SCHH[16];	    /* 124 bits */
@@ -375,7 +379,7 @@ int build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8
 	tetra_scramb_bits(SCRAMB_INIT, si_type5, 216);
 	// printf("SI type5: %s\n", osmo_ubit_dump(si_type5, 216));
 
-    int len = build_dm_sync_burst(out, sb_type5, si_type5); 
+    int len = build_dm_sync_burst(out, sb_type5, si_type5);
     printf("DPRES-SYNC burst: %s\n", osmo_ubit_dump(out, len));
     return len;
 }
@@ -396,6 +400,8 @@ void dp_sap_udata_req(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 
 }
 
+// TODO fix everything
+#if 0
 // rx thread
 void *rep_rx_thread()
 {
@@ -560,11 +566,37 @@ void rep_tx_thread()
     }
 
 };
+#endif
 
 void catch_alarm(int sig) {
     struct tetra_tdma_time *phy_time = &t_phy_state.time;
     printf("  ## timer alarm! MAC PHY time: %02d/%d ##\n", phy_time->fn, phy_time->tn);
     signal(sig, catch_alarm);
+}
+
+
+// Remnants from old main
+void init_more_tetra_dmo_rep_stuff(struct tetra_mac_state *tms)
+{
+	t_phy_state.time.fn=1;
+	t_phy_state.time.tn=1;
+	t_phy_state.time_adjust_cb_func = resync_timeslots;
+
+	// initialize fragmentation slots
+	memset((void *)&fragslots,0,sizeof(struct fragslot)*FRAGSLOT_NR_SLOTS);
+	char desc[]="slot \0";
+	for (int k=0;k<FRAGSLOT_NR_SLOTS;k++) {
+		desc[4]='0'+k;
+		fragslots[k].msgb=msgb_alloc(8192, desc);
+		msgb_reset(fragslots[k].msgb);
+	}
+
+	/*gettimeofday(&now, NULL);
+	uint64_t now_us = (double)now.tv_sec*1.0e6+(double)now.tv_usec;
+	tms->channel_state_last_chg=now_us;*/
+	// TODO look at timing again and redo the thing above
+
+	tms->channel_state=DM_CHANNEL_S_MS_IDLE_UNKNOWN;
 }
 
 

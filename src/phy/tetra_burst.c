@@ -574,7 +574,7 @@ enum tetra_train_seq tetra_check_train(const uint8_t *burst, unsigned int len)
 	{
 		const struct dmo_sync_bits *b = (void*)burst;
 		if (count_errs(b->train, y_bits, sizeof(y_bits)) <= 2)
-			return TETRA_TRAIN_NORM_1;
+			return TETRA_TRAIN_SYNC;
 	}
 	{
 		const struct dmo_normal_bits *b = (void*)burst;
