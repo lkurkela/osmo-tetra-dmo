@@ -1,10 +1,13 @@
 /* Process and produce bursts based on their timeslot number */
 
 #include "hamtetra_slotter.h"
+#include "phy/tetra_burst.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <assert.h>
+
+extern struct tetra_phy_state t_phy_state;
 
 struct slotter_state *slotter_init()
 {
@@ -37,8 +40,15 @@ int slotter_rx_burst(struct slotter_state *s, const uint8_t *bits, int len, stru
 		timing_resync(s->timing, &sync_slot);
 	}
 
-	// TODO: check training sequence type somewhere
-	//tetra_burst_dmo_rx_cb(bits + TODO, len - TODO, TETRA_TRAIN_SYNC, trs->burst_cb_priv);
+	/* MAC functions read timeslot number from the global variable t_phy_state.
+	 * TODO: change struct timing_slot to include struct tdma_time
+	 * to simplify this part. */
+	t_phy_state.time.tn = slot->tn;
+	t_phy_state.time.fn = slot->fn;
+	t_phy_state.time.mn = slot->mn;
+
+	enum tetra_train_seq ts = tetra_check_train(bits, len);
+	tetra_burst_dmo_rx_cb2(bits, len, ts, s->tms);
 
 	s->prev_burst_time = slot->time;
 	return 0;

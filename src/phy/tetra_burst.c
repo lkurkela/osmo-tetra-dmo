@@ -25,6 +25,7 @@
 #include <stdio.h>
 
 #include <phy/tetra_burst.h>
+#include <phy/tetra_burst_bits.h>
 #include <tetra_common.h>
 
 #define DQPSK4_BITS_PER_SYM	2
@@ -487,6 +488,7 @@ void tetra_burst_rx_cb(const uint8_t *burst, unsigned int len, enum tetra_train_
 	}
 }
 
+
 void tetra_burst_dmo_rx_cb(const uint8_t *burst, unsigned int len, enum tetra_train_seq type, void *priv)
 {
 	uint8_t dnbf_buf[2*DMO_DNB_BLK_BITS];
@@ -515,4 +517,72 @@ void tetra_burst_dmo_rx_cb(const uint8_t *burst, unsigned int len, enum tetra_tr
 		// did we forgot something?
 		break;
 	}
+}
+
+
+static int count_errs(const uint8_t *a, const uint8_t *b, int len)
+{
+	int i, errs = 0;
+	for (i = 0; i < len; i++)
+		if (a[i] != b[i])
+			errs++;
+	return errs;
+}
+
+
+/* Note: this may use different indexing for the bits
+ * than tetra_burst_dmo_rx_cb. */
+void tetra_burst_dmo_rx_cb2(const uint8_t *burst, unsigned int len, enum tetra_train_seq type, void *priv)
+{
+	uint8_t dnbf_buf[2*DMO_DNB_BLK_BITS];
+
+	switch (type) {
+	case TETRA_TRAIN_SYNC: {
+		const struct dmo_sync_bits *b = (void*)burst;
+		/* Split SB1, SB2 Block */
+		/* send parts of the burst via DP-SAP into lower MAC */
+		dp_sap_udata_ind(DPSAP_T_SCH_S, b->block1, sizeof(b->block1), priv);
+		dp_sap_udata_ind(DPSAP_T_SCH_H, b->block2, sizeof(b->block2), priv);
+		break;
+	}
+	case TETRA_TRAIN_NORM_2: {
+		const struct dmo_normal_bits *b = (void*)burst;
+		/* send two logical channels of the DNB burst via DP-SAP into lower MAC (396-2 9.4.3.3.3) */
+		dp_sap_udata_ind(DPSAP_T_DNB1, b->block1, sizeof(b->block1), priv);
+		dp_sap_udata_ind(DPSAP_T_DNB1, b->block2, sizeof(b->block2), priv);
+		break;
+	}
+	case TETRA_TRAIN_NORM_1: {
+		const struct dmo_normal_bits *b = (void*)burst;
+		/* re-combine the two block parts */
+		memcpy(dnbf_buf, b->block1, DMO_DNB_BLK_BITS);
+		memcpy(dnbf_buf + DMO_DNB_BLK_BITS, b->block2, DMO_DNB_BLK_BITS);
+		/* send one logical channel of the DNB burst via DP-SAP into lower MAC */
+		dp_sap_udata_ind(DPSAP_T_SCH_F, dnbf_buf, 2*DMO_DNB_BLK_BITS, priv);
+		break;
+	}
+	default:
+		printf("#### hello from burst with to-do training sequence\n");
+		// did we forgot something?
+		break;
+	}
+}
+
+
+enum tetra_train_seq tetra_check_train(const uint8_t *burst, unsigned int len)
+{
+	{
+		const struct dmo_sync_bits *b = (void*)burst;
+		if (count_errs(b->train, y_bits, sizeof(y_bits)) <= 2)
+			return TETRA_TRAIN_NORM_1;
+	}
+	{
+		const struct dmo_normal_bits *b = (void*)burst;
+		// TODO: check preamble too
+		if (count_errs(b->train, n_bits, sizeof(n_bits)) <= 0)
+			return TETRA_TRAIN_NORM_1;
+		if (count_errs(b->train, p_bits, sizeof(p_bits)) <= 0)
+			return TETRA_TRAIN_NORM_2;
+	}
+	return TETRA_TRAIN_INVALID;
 }
