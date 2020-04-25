@@ -4,13 +4,16 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <assert.h>
 
 struct slotter_state *slotter_init()
 {
 	struct slotter_state *s;
 	s = calloc(1, sizeof(*s));
 
-	// TODO
+	s->tms = calloc(1, sizeof(*s->tms));
+	tetra_mac_state_init(s->tms);
+	s->tms->infra_mode = TETRA_INFRA_DMO;
 
 	return s;
 }
@@ -18,6 +21,8 @@ struct slotter_state *slotter_init()
 int slotter_rx_burst(struct slotter_state *s, const uint8_t *bits, int len, struct timing_slot *slot)
 {
 	printf("RX slot: %2u %2u %2u, diff %10ld ns\n", slot->tn, slot->fn, slot->mn, slot->diff);
+
+	// TODO: add different operating modes here
 
 	/* Just a test: if no bursts have been received in a while,
 	 * synchronize timing to the first received burst. */
@@ -32,16 +37,35 @@ int slotter_rx_burst(struct slotter_state *s, const uint8_t *bits, int len, stru
 		timing_resync(s->timing, &sync_slot);
 	}
 
+	// TODO: check training sequence type somewhere
+	//tetra_burst_dmo_rx_cb(bits + TODO, len - TODO, TETRA_TRAIN_SYNC, trs->burst_cb_priv);
+
 	s->prev_burst_time = slot->time;
 	return 0;
 }
 
 
+// TODO: move this to headers
+int build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out);
+
+
 int slotter_tx_burst(struct slotter_state *s, uint8_t *bits, int maxlen, struct timing_slot *slot)
 {
+	int len = -1;
 	//printf("TX slot: %2u %2u %2u\n", slot->tn, slot->fn, slot->mn);
 
-	// TODO
+	// TODO: add different operating modes here
 
-	return -1;
+	// trying to glue it to tetra-dmo-rep here
+	int send_count = s->send_count;
+	if (slot->fn == 1 && slot->tn == 1)
+		send_count = 8;
+	if (--send_count >= 0) {
+		uint8_t countdown = (send_count-1) / 4;
+		len = build_pdu_dpress_sync(slot->fn, slot->tn, countdown, bits);
+	}
+	s->send_count = send_count;
+
+	assert(len <= maxlen);
+	return len;
 }

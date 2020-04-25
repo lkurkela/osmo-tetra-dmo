@@ -227,7 +227,7 @@ int bits_to_floats(const struct frame *in, struct frame *out, size_t maxlen)
 
 
 
-void build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out) 
+int build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out) 
 {
     uint8_t pdu_sync_SCHS[8];		/* 60 bits */
     uint8_t pdu_sync_SCHH[16];	    /* 124 bits */
@@ -297,7 +297,7 @@ void build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint
 	uint8_t si_type4[216];
 	uint8_t si_type5[216];
 
-    uint8_t burst[255*2];
+    //uint8_t burst[255*2];
 	uint16_t crc;
 	uint8_t *cur;
 
@@ -375,10 +375,9 @@ void build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint
 	tetra_scramb_bits(SCRAMB_INIT, si_type5, 216);
 	// printf("SI type5: %s\n", osmo_ubit_dump(si_type5, 216));
 
-    build_dm_sync_burst(burst, sb_type5, si_type5); 
-    // printf("DPRES-SYNC burst: %s\n", osmo_ubit_dump(burst, 255*2));
-    memcpy(out, burst, 510);
-
+    int len = build_dm_sync_burst(out, sb_type5, si_type5); 
+    printf("DPRES-SYNC burst: %s\n", osmo_ubit_dump(out, len));
+    return len;
 }
 
 
@@ -568,6 +567,10 @@ void catch_alarm(int sig) {
     signal(sig, catch_alarm);
 }
 
+
+/* main function temporarily commented out to be able to link
+ * this file into hamtetra_main */
+#if 0
 int main(int argc, char **argv)
 {
     pthread_t thread_rx_handle;
@@ -620,3 +623,4 @@ int main(int argc, char **argv)
 
     exit (0);
 }
+#endif
