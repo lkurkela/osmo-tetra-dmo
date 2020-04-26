@@ -28,8 +28,6 @@ int main(void)
 	timing1->slotter = slotter1;
 	slotter1->timing = timing1;
 
-	long len_metadata = sizeof(struct metadata);
-	
 	zmq_rx_socket = zmq_socket(zmq_context, ZMQ_SUB);
 	/* Subscribe to both received frames and transmitter ticks */
 	if (zmq_connect(zmq_rx_socket, "ipc:///tmp/dpsk-modem-rx") < 0)
@@ -51,8 +49,8 @@ int main(void)
 	for (;;) {
 		struct burst_bits rx_msg;
 		int nread;
-		nread = zmq_recv(zmq_rx_socket, &rx_msg, sizeof(rx_msg), ZMQ_DONTWAIT);
-		if (nread >= len_metadata) {
+		nread = zmq_recv(zmq_rx_socket, &rx_msg, sizeof(rx_msg), 0);
+		if (nread >= sizeof(struct metadata)) {
 			/* It's a received burst */
 			int len = nread - sizeof(struct metadata);
 
