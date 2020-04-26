@@ -49,10 +49,15 @@ enum tetra_train_seq {
 	TETRA_TRAIN_NORM_3,
 	TETRA_TRAIN_SYNC,
 	TETRA_TRAIN_EXT,
+	TETRA_TRAIN_INVALID
 };
 
 /* find a TETRA training sequence in the burst buffer indicated */
 int tetra_find_train_seq(const uint8_t *in, unsigned int end_of_in,
 			 uint32_t mask_of_train_seq, unsigned int *offset);
+
+void tetra_burst_dmo_rx_cb2(const uint8_t *burst, unsigned int len, enum tetra_train_seq type, void *priv);
+
+enum tetra_train_seq tetra_check_train(const uint8_t *burst, unsigned int len);
 
 #endif /* TETRA_BURST_H */
