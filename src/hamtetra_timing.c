@@ -1,5 +1,11 @@
 /* Convert between burst timestamps and timeslot numbers.
- * Handle timing of producing transmit bursts. */
+ * Handle timing of producing transmit bursts.
+ *
+ * In terms of TETRA specification, a part of the L1 (physical layer)
+ * happens here. Rest of L1 happens in the modem, which synchronizes
+ * to individual received bursts based on their training sequences
+ * and then delivers them here.
+ */
 
 #include "hamtetra_timing.h"
 #include "hamtetra_slotter.h"
