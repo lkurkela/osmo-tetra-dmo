@@ -10,15 +10,22 @@
 #include "hamtetra_timing.h"
 #include "hamtetra_slotter.h"
 #include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 #include <math.h>
+
+/* DMO EN 300 396-2 - 9.4.3.3.2 Inter-slot frequency correction bits */
+static const uint8_t g_bits[40] = { 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0};
+
 
 struct timing_state *timing_init()
 {
 	struct timing_state *s;
 	s = calloc(1, sizeof(*s));
 
+	s->sym_time = 1e9 / 18000.0 + 0.5;
 	s->slot_time = 1e9 * 255.0 / 18000.0 + 0.5;
+	s->use_interslot_bits = 1;
 
 	return s;
 }
@@ -53,7 +60,13 @@ int timing_rx_burst(struct timing_state *s, const uint8_t *bits, int len, uint64
 
 int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t *ts)
 {
-	const int64_t time_margin = 0;
+	if (maxlen < 510)
+		return -1;
+
+	/* Extra margin to ensure that inter-slot bits can still be
+	 * added to the end of the previous slot */
+	const int64_t time_margin = s->sym_time * 4;
+
 	int retlen = -1;
 	uint64_t tnow = *ts;
 	if (s->tx_time == 0) {
@@ -76,7 +89,35 @@ int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t 
 		};
 
 		retlen = slotter_tx_burst(s->slotter, bits, maxlen, &tslot);
-		*ts = tx_time + tslot.diff;
+		int offset_syms = 0;
+		unsigned char is_dmo = 0;
+		if (retlen < 0) {
+			// No transmission
+		} else if (retlen == 470) {
+			// DMO burst
+			is_dmo = 1;
+			if (s->use_interslot_bits && s->prev_dmo) {
+				/* A DMO burst was transmitted in the previous slot.
+				 * Add 40 interslot frequency correction bits in the beginning
+				 * and place the timestamp 3 symbols before the slot boundary,
+				 * so it starts right after the previous burst. */
+				offset_syms = -3;
+				memmove(bits + 40, bits, retlen);
+				memcpy(bits, g_bits, 40);
+				retlen += 40;
+			} else {
+				/* DMO burst starts 34 bits (17 symbols) after slot boundary. */
+				offset_syms = 17;
+			}
+		} else if (retlen == 510) {
+			/* Burst that fills the whole slot.
+			 * Keep the timestamp on slot boundary. */
+			offset_syms = 0;
+		} else {
+			fprintf(stderr, "Warning: unexpected burst length %d\n", retlen);
+		}
+		*ts = tx_time + tslot.diff + s->sym_time * offset_syms;
+		s->prev_dmo = is_dmo;
 
 		// Go to the next slot
 		s->tx_time = tx_time + s->slot_time;
@@ -110,5 +151,6 @@ int timing_resync(struct timing_state *s, struct timing_slot *slot)
 
 	s->tx_time = next_time;
 	s->tx_slot = next_slot;
+	s->prev_dmo = 0;
 	return 0;
 }

@@ -45,12 +45,12 @@ static int hamtetra_rx_output_frame(void *arg, const struct frame *in)
 static int hamtetra_tx_input_frame(void *arg, struct frame *out, size_t maxlen, timestamp_t timenow)
 {
 	int len;
-	uint64_t ts = timenow;
+	uint64_t ts = timenow + 3000000; // TODO: make suo give the correct deadline;
 	len = timing_tx_burst(timing1, out->data, BURST_MAXBITS, &ts);
 	if (len >= 0) {
 		assert(len <= BURST_MAXBITS);
 		out->m.len = len;
-		out->m.time = ts + 3000000; // TODO: make suo give the correct deadline
+		out->m.time = ts;
 		out->m.flags = METADATA_TIME | METADATA_NO_LATE;
 	}
 	return len;
@@ -126,6 +126,7 @@ static int hamtetra_init(const char *hw, double tetra_freq)
 	struct burst_dpsk_receiver_conf *rx_conf = burst_dpsk_receiver_code.init_conf();
 	rx_conf->samplerate = samplerate;
 	rx_conf->centerfreq = offset_freq;
+	rx_conf->syncpos = 143; // To get complete slots for DMO
 	void *rx_arg = burst_dpsk_receiver_code.init(rx_conf);
 
 	if (rx_arg == NULL)
