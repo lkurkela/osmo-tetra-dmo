@@ -12,8 +12,6 @@ struct timing_state {
 
 	// Parameter: length of a slot
 	uint64_t slot_time;
-	// Parameter: how long beforehand a burst is produced
-	int64_t ahead_time;
 
 	// Next transmission slot
 	uint64_t tx_time;

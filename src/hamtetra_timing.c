@@ -19,7 +19,6 @@ struct timing_state *timing_init()
 	s = calloc(1, sizeof(*s));
 
 	s->slot_time = 1e9 * 255.0 / 18000.0 + 0.5;
-	s->ahead_time = 12.5e6;
 
 	return s;
 }
@@ -54,16 +53,17 @@ int timing_rx_burst(struct timing_state *s, const uint8_t *bits, int len, uint64
 
 int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t *ts)
 {
+	const int64_t time_margin = 0;
 	int retlen = -1;
 	uint64_t tnow = *ts;
 	if (s->tx_time == 0) {
 		// Initialize timing on first tick
-		s->tx_time = tnow + s->ahead_time + s->slot_time;
+		s->tx_time = tnow + s->slot_time*2;
 	}
 
 	const uint64_t tx_time = s->tx_time;
 	int64_t tdiff = tnow - tx_time;
-	if (tdiff >= -s->ahead_time) {
+	if (tdiff >= -time_margin) {
 		const unsigned slot = s->tx_slot;
 
 		struct timing_slot tslot = {
