@@ -92,7 +92,7 @@ struct tetra_dmo_pdu_dpres_sync {
 	uint8_t usage_restriction_type;
 	uint8_t sckn;
 	uint32_t edsi_urtc_initialization_value;
-	__uint128_t urt_addressing;
+	// __uint128_t urt_addressing;
 };
 static struct tetra_dmo_pdu_dpres_sync _pdu_dpres_sync, *pdu_dpres_sync = &_pdu_dpres_sync;
 
