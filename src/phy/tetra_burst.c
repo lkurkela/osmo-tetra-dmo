@@ -294,10 +294,6 @@ int build_dm_sync_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bkn2)
 	uint8_t *cur = buf;
 	uint8_t *hl;
 
-	/* preceding interslot guard bits */
-	memcpy(cur, g_bits+6, 34);
-	cur += 34;
-
 	/* Preamble bits: l1 to l12 */
 	memcpy(cur, l_bits, 12);
 	cur += 12;
@@ -325,10 +321,6 @@ int build_dm_sync_burst(uint8_t *buf, const uint8_t *bkn1, const uint8_t *bkn2)
 	/* Tail bits: t1 to t2 */
 	memcpy(cur, t_bits+2, 2);
 	cur += 2;
-
-	/* following interslot guard bits */
-	memcpy(cur, g_bits, 6);
-	cur += 6;
 
 	/* put in the phase adjustment bits */
 	put_phase_adj_bits(buf, HL, hl);

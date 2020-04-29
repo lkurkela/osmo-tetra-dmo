@@ -20,6 +20,9 @@ struct burst_bits {
 
 int main(void)
 {
+	// Parameter: how long beforehand a burst is produced
+	uint64_t tx_ahead_time = 12.5e6;
+
 	void *zmq_rx_socket, *zmq_tx_socket;
 	zmq_context = zmq_ctx_new();
 
@@ -65,7 +68,7 @@ int main(void)
 			/* It's a transmitter tick */
 
 			int len;
-			uint64_t ts = rx_msg.m.time;
+			uint64_t ts = rx_msg.m.time + tx_ahead_time;
 			len = timing_tx_burst(timing1, tx_msg.data, BURST_MAXBITS, &ts);
 
 			if (len >= 0) {

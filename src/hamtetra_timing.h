@@ -12,12 +12,16 @@ struct timing_state {
 
 	// Parameter: length of a slot
 	uint64_t slot_time;
-	// Parameter: how long beforehand a burst is produced
-	int64_t ahead_time;
+	// Length of a symbol
+	int64_t sym_time;
 
 	// Next transmission slot
 	uint64_t tx_time;
 	unsigned tx_slot; // Combined slot number, counting from 0 to 4319
+
+	unsigned char prev_dmo; // Flag: a DMO burst was transmitted in the previous slot
+
+	unsigned char use_interslot_bits; // Configuration flag
 };
 
 struct timing_slot {
@@ -53,7 +57,10 @@ int timing_rx_burst(struct timing_state *s, const uint8_t *bits, int len, uint64
  * -1 if there is no burst to transmit at the moment.
  *
  * Timestamp of the burst is returned in *ts.
- * The current time of the modulator is given in *ts. */
+ * A "deadline" is given in *ts:
+ * if a burst should be transmitted before the time given in *ts,
+ * it should be returned in this call.
+ */
 int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t *ts);
 
 /* Resynchronize time counters. */

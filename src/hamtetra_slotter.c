@@ -1,4 +1,9 @@
-/* Process and produce bursts based on their timeslot number */
+/* Process and produce bursts based on their timeslot number.
+ *
+ * This is where the L2 protocols, i.e. lower-MAC and upper-MAC run.
+ * The calls from hamtetra_timing.c to here roughly correspond
+ * to the DP-SAP interface in TETRA specifications.
+ */
 
 #include "hamtetra_slotter.h"
 #include "phy/tetra_burst.h"

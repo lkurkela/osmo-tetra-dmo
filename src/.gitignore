@@ -7,6 +7,7 @@ tetra-rx
 tetra-rx-dmo
 tetra-dmo-rep
 hamtetra_main
+hamtetra_main2
 float_to_bits
 crc_test
 tunctl
