@@ -35,6 +35,7 @@ struct timing_slot {
 	unsigned char fn; // TDMA Frame Number (1 to 18)
 	unsigned char mn; // TDMA Multiframe Number (1 to 60)
 	unsigned char hn; // TDMA Hyperframe Number?
+	int changed;      // timing slot modified during the process?
 };
 
 /* Allocate and initialize a timing state.

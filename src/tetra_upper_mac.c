@@ -41,6 +41,7 @@
 #include "tetra_mle_pdu.h"
 #include "tetra_gsmtap.h"
 #include "lower_mac/tetra_lower_mac.h"
+#include "hamtetra_config.h"
 
 static int rx_tm_sdu(struct tetra_mac_state *tms, struct msgb *msg, unsigned int len);
 
@@ -784,7 +785,7 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 
 		// if (fragslots[slot].active) printf("\nWARNING: leftover fragment slot\n");
 		fragmsgb=fragslots[slot].msgb;
-		printf ("\nFRAGMENT START slot=%i msgb=%p\n",slot,fragmsgb);
+		// printf ("\nFRAGMENT START slot=%i msgb=%p\n",slot,fragmsgb);
 		msgb_reset(fragmsgb);
 
 		fragslots[slot].active=1;
@@ -848,11 +849,12 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 
 		}
 
+		uint16_t my_repaddr = (REP_ADDRESS & 0x3ff);
 
 		// ready to repeat DM-MASTER DM-SETUP request
-		if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->communication_type == 1 && pdu_dmac_sync->fragmentation_flag == 0 && pdu_dmac_sync->message_type == 8 && pdu_dmac_sync->processed==false) {
+		if (pdu_dmac_sync->repgw_address==my_repaddr && pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->communication_type == 1 && pdu_dmac_sync->fragmentation_flag == 0 && pdu_dmac_sync->message_type == 8 && pdu_dmac_sync->processed==false) {
 			uint8_t master_fcountdown = pdu_dmac_sync->frame_countdown;
-			uint8_t out_fn = (pdu_dmac_sync->frame_number+master_fcountdown) % 18;
+			uint8_t out_fn = (pdu_dmac_sync->frame_number+master_fcountdown+1) % 18;
 			uint8_t out_tn = 1;
 
 			uint8_t dcc_rep = pdu_dmac_sync->repgw_address & 0x3f;
@@ -862,7 +864,7 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 			pdu_dmac_sync->processed = true;
 			printf("## we are gonna repeat - out starting at slave link FN: %d\n", out_fn);
 
-			for (int fn=0; fn<2; fn++) { // TODO - use DN232 constant
+			for (int fn=0; fn<(DN232+1); fn++) { // TODO - use DN232 constant
 
 				for (int tn=0; tn<4; tn++) {
 
@@ -890,12 +892,12 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 					bv.data = pdu_sync_SCHS;
 					bv.data_len = sizeof(pdu_sync_SCHS);
 
-					bitvec_set_uint(&bv, 13, 4);	/* System Code  */
+					bitvec_set_uint(&bv, pdu_dmac_sync->system_code, 4);	/* System Code  */
 					bitvec_set_uint(&bv, 0, 2);	    /* Sync PDU type */
 					bitvec_set_uint(&bv, 1, 2);	    /* Communication Type */
 					bitvec_set_uint(&bv, 0, 1);	    /* Master/slave link flag */
-					bitvec_set_uint(&bv, 1, 1);	    /* Gateway generated message flag */
-					bitvec_set_uint(&bv, pdu_dmac_sync->ab_channel_usage, 2);	    /* A/B channel usage */
+					bitvec_set_uint(&bv, 0, 1);	    /* Gateway generated message flag */
+					bitvec_set_uint(&bv, 0, 2);	    /* A/B channel usage */
 					bitvec_set_uint(&bv, tn, 2);	/* Slot number */
 					bitvec_set_uint(&bv, out_fn+fn, 5);	/* Frame number */
 					bitvec_set_uint(&bv, pdu_dmac_sync->airint_encryption_state, 2);   /* Air interface encryption state */
@@ -945,21 +947,29 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 					for (int i=0; i<pdu_dmac_sync->dm_sdu_len; i++) {
 						bitvec_set_uint(&bv, pdu_dmac_sync->dm_sdu[i], 1);
 					}
+					if (pdu_dmac_sync->fillbit_indication==1) {
+						bitvec_set_uint(&bv, 1, 1);
+					}
 					d_unitdata_param->lchan = TETRA_LC_SCH_H;
 					osmo_pbit2ubit(si_type2, pdu_sync_SCHH, 124);
 
 					printf(" SCH/H - %s\n", osmo_ubit_dump(si_type2, 124));
 					msg->l1h = msgb_put(msg, 124);
 					memcpy(msg->l1h, si_type2, 124);
+
+					tms->channel_state = DM_CHANNEL_S_DMREP_ACTIVE_OCCUPIED;
+
 					rx_dmv_unitdata_req(tdp, tms);
 
 				}
 
 			}
-		
 		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->frame_countdown == 0 && pdu_dmac_sync->slot_number == 3 && pdu_dmac_sync->message_type == 8 && pdu_dmac_sync->processed==true) {
 			pdu_dmac_sync->processed = false;
 			printf("DM-SETUP processed flag cleared!\n");
+
+		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == 8 && pdu_dmac_sync->processed==true) {
+			printf("ignoring the repetitive DMAC-SYNC from DM-MASTER\n");
 
 		}
 
@@ -994,7 +1004,7 @@ static int rx_dmv_unitdata_ind(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_
 
 	if (tup->lchan == TETRA_LC_SCH_S || tup->lchan == TETRA_LC_SCH_H) {
 		pdu_name = "SYNC";
-		tms->channel_state = DM_CHANNEL_S_MS_IDLE_OCCUPIED;
+		tms->channel_state = DM_CHANNEL_S_DMREP_IDLE_OCCUPIED;
 	} else {
 		pdu_type = bits_to_uint(msg->l1h, 2);
 		pdu_name = tetra_get_dmacpdu_name(pdu_type);

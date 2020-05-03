@@ -7,6 +7,7 @@
 #include "suo.h"
 #include "hamtetra_timing.h"
 #include "hamtetra_slotter.h"
+#include "hamtetra_mac.h"
 
 void *zmq_context;
 struct timing_state *timing1;
@@ -30,6 +31,8 @@ int main(void)
 	timing1 = timing_init();
 	timing1->slotter = slotter1;
 	slotter1->timing = timing1;
+
+	mac_hamtetra_init();
 
 	zmq_rx_socket = zmq_socket(zmq_context, ZMQ_SUB);
 	/* Subscribe to both received frames and transmitter ticks */

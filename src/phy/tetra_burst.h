@@ -2,6 +2,7 @@
 #define TETRA_BURST_H
 
 #include <stdint.h>
+#include "hamtetra_timing.h"
 
 enum tp_sap_data_type {
 	TPSAP_T_SB1,
@@ -27,7 +28,7 @@ enum dp_sap_data_type {
 };
 
 
-extern void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv);
+extern void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv, struct timing_slot *slot);
 extern void tp_sap_udata_ind(enum tp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv);
 
 /* 9.4.4.2.6 Synchronization continuous downlink burst */
@@ -56,7 +57,7 @@ enum tetra_train_seq {
 int tetra_find_train_seq(const uint8_t *in, unsigned int end_of_in,
 			 uint32_t mask_of_train_seq, unsigned int *offset);
 
-void tetra_burst_dmo_rx_cb2(const uint8_t *burst, unsigned int len, enum tetra_train_seq type, void *priv);
+void tetra_burst_dmo_rx_cb2(const uint8_t *burst, unsigned int len, enum tetra_train_seq type, void *priv, struct timing_slot *slot);
 
 enum tetra_train_seq tetra_check_train(const uint8_t *burst, unsigned int len);
 

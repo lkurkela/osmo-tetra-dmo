@@ -39,7 +39,7 @@
 #include <tetra_prim.h>
 #include "tetra_upper_mac.h"
 #include <lower_mac/viterbi.h>
-#include "tetra-dmo-rep.h"
+#include "hamtetra_mac.h"
 
 
 #define swap16(x) ((x)<<8)|((x)>>8)
@@ -286,7 +286,7 @@ struct tetra_dmvsap_prim *dmvsap_prim_alloc(uint16_t prim, uint8_t op)
 
 
 /* incoming DP-SAP UNITDATA.ind  from PHY into lower MAC */
-void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv)
+void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv, struct timing_slot *slot)
 {
 	/* various intermediary buffers */
 	uint8_t type4[512];
@@ -423,9 +423,12 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 
 		}
 		/* update the PHY layer time */
-		if (t_phy_state.time.fn != tcd->time.fn || t_phy_state.time.tn != tcd->time.tn) {
-			printf(" #### TIME WARP - phy: %d/%d tcd: %d/%d ###\n",t_phy_state.time.fn,t_phy_state.time.tn,tcd->time.fn,tcd->time.tn);
-			// t_phy_state.time_adjust_cb_func(tcd->time.fn, tcd->time.tn);
+		if (slot->fn != tcd->time.fn || slot->tn != tcd->time.tn) {
+			printf(" #### TIME WARP - phy: %d/%d tcd: %d/%d ###\n", slot->fn,slot->tn,tcd->time.fn,tcd->time.tn);
+			slot->fn = tcd->time.fn;
+			slot->tn = tcd->time.tn;
+			slot->mn += 1;
+			slot->changed = 1;
 		}
 		memcpy(&t_phy_state.time, &tcd->time, sizeof(t_phy_state.time));
 		d_unitdata_param->lchan = TETRA_LC_SCH_S;
@@ -475,7 +478,11 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 			tcd->colour_code = (dcc_srcaddr) | (dcc_mni << 24); 
 			d_unitdata_param->colour_code = tcd->colour_code;
 
-			tcd->scramb_init = tetra_dmo_scramb_get_init(tcd->mni, tcd->src_address);
+			if (tcd->communication_type>0) {
+				tcd->scramb_init = tetra_dmo_scramb_get_init(tcd->repgw_address, tcd->src_address);
+			} else {
+				tcd->scramb_init = tetra_dmo_scramb_get_init(tcd->mni, tcd->src_address);
+			}
 
 			printf("REPGW %d, Fill %d, Frag %d, num %d, FN cnt %d, dst-type %d, dst-addr %d, src-type %d, src %d, mni %d (MCC %d, MNC %d), DCC %d, msg-type %d \n",
 				tcd->repgw_address, tcd->fillbit_indication, tcd->fragmentation_flag, tcd-> number_of_SCH_F_slots, tcd->frame_countdown,
@@ -704,7 +711,7 @@ int rx_dmv_unitdata_req(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_state *
 		build_encoded_block_sch(DPSAP_T_SCH_H, msg->l1h, sch_burst->block2);
 		build_dm_sync_burst(burst, sch_burst->block1, sch_burst->block2); 
 		printf("SYNC burst: %s\n", osmo_ubit_dump(burst, 255*2));
-		dp_sap_udata_req(DPSAP_T_SCH_H, burst, 510, tup->tdma_time);				
+		dp_sap_udata_req(DPSAP_T_SCH_H, burst, 510, tup->tdma_time, tms);				
 
 	} else {
 		printf("puf");

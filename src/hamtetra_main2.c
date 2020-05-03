@@ -5,6 +5,7 @@
 #include "suo.h"
 #include "hamtetra_timing.h"
 #include "hamtetra_slotter.h"
+#include "hamtetra_mac.h"
 #include "signal-io/soapysdr_io.h"
 #include "modem/burst_dpsk_receiver.h"
 #include "modem/psk_transmitter.h"
@@ -82,6 +83,8 @@ static int hamtetra_init(const char *hw, double tetra_freq)
 
 	timing1->slotter = slotter1;
 	slotter1->timing = timing1;
+
+	mac_hamtetra_init();
 
 	if (strcmp(hw, "file") == 0) {
 		return -1; // not implemented

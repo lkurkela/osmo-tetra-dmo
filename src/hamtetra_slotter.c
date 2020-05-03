@@ -5,6 +5,8 @@
  * to the DP-SAP interface in TETRA specifications.
  */
 
+#include "hamtetra_pdu_generator.h"
+#include "hamtetra_mac.h"
 #include "hamtetra_slotter.h"
 #include "phy/tetra_burst.h"
 #include <stdlib.h>
@@ -34,7 +36,7 @@ int slotter_rx_burst(struct slotter_state *s, const uint8_t *bits, int len, stru
 	// TODO: add different operating modes here
 
 	/* Just a test: if no bursts have been received in a while,
-	 * synchronize timing to the first received burst. */
+	 * synchronize timing to the first received burst. 
 	if (slot->time - s->prev_burst_time > 1000000000UL) {
 		struct timing_slot sync_slot = {
 			.time = slot->time,
@@ -44,7 +46,7 @@ int slotter_rx_burst(struct slotter_state *s, const uint8_t *bits, int len, stru
 			.mn = 1
 		};
 		timing_resync(s->timing, &sync_slot);
-	}
+	} */
 
 	/* MAC functions read timeslot number from the global variable t_phy_state.
 	 * TODO: change struct timing_slot to include struct tdma_time
@@ -53,16 +55,26 @@ int slotter_rx_burst(struct slotter_state *s, const uint8_t *bits, int len, stru
 	t_phy_state.time.fn = slot->fn;
 	t_phy_state.time.mn = slot->mn;
 
+	slot->changed = 0;
 	enum tetra_train_seq ts = tetra_check_train(bits, len);
-	tetra_burst_dmo_rx_cb2(bits, len, ts, s->tms);
+	tetra_burst_dmo_rx_cb2(bits, len, ts, s->tms, slot);
+
+	// if lower mac resyncronizes the frame timings based on SCH/S burst
+	if (slot->changed>0) {
+		struct timing_slot sync_slot = {
+			.time = slot->time,
+			.diff = 0, // not used
+			.tn = slot->tn,
+			.fn = slot->fn,
+			.mn = slot->mn
+		};
+		timing_resync(s->timing, &sync_slot);
+
+	}
 
 	s->prev_burst_time = slot->time;
 	return 0;
 }
-
-
-// TODO: move this to headers
-int build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out);
 
 
 int slotter_tx_burst(struct slotter_state *s, uint8_t *bits, int maxlen, struct timing_slot *slot)
@@ -73,14 +85,7 @@ int slotter_tx_burst(struct slotter_state *s, uint8_t *bits, int maxlen, struct 
 	// TODO: add different operating modes here
 
 	// trying to glue it to tetra-dmo-rep here
-	int send_count = s->send_count;
-	if (slot->fn == 1 && slot->tn == 1)
-		send_count = 8;
-	if (--send_count >= 0) {
-		uint8_t countdown = (send_count-1) / 4;
-		len = build_pdu_dpress_sync(slot->fn, slot->tn, countdown, bits);
-	}
-	s->send_count = send_count;
+	len = mac_request_tx_buffer_content(bits, slot);
 
 	assert(len <= maxlen);
 	return len;
