@@ -33,6 +33,7 @@
 
 #include <zmq.h>
 #include "suo.h"
+#include "pdus.h"
 
 #include <signal.h>
 

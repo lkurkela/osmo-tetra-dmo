@@ -26,11 +26,11 @@ crc_test: crc_test.o tetra_common.o libosmo-tetra-mac.a
 
 # tetra-rx: tetra-rx.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 # tetra-rx-dmo: tetra-rx-dmo.o libosmo-tetra-phy.a libosmo-tetra-mac.a
-tetra-dmo-rep: tetra-dmo-rep.o libosmo-tetra-phy.a libosmo-tetra-mac.a
+tetra-dmo-rep: tetra-dmo-rep.o libosmo-tetra-phy.a libosmo-tetra-mac.a pdus.o
 
-hamtetra_main: hamtetra_main.o hamtetra_timing.o hamtetra_slotter.o tetra-dmo-rep.o libosmo-tetra-phy.a libosmo-tetra-mac.a
+hamtetra_main: hamtetra_main.o hamtetra_timing.o hamtetra_slotter.o tetra-dmo-rep.o pdus.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 
-hamtetra_main2: hamtetra_main2.o hamtetra_timing.o hamtetra_slotter.o tetra-dmo-rep.o libosmo-tetra-phy.a libosmo-tetra-mac.a ../../suo/libsuo/build/libsuo-dsp.a ../../suo/libsuo/build/libsuo-io.a
+hamtetra_main2: hamtetra_main2.o hamtetra_timing.o hamtetra_slotter.o tetra-dmo-rep.o pdus.o libosmo-tetra-phy.a libosmo-tetra-mac.a ../../suo/libsuo/build/libsuo-dsp.a ../../suo/libsuo/build/libsuo-io.a
 
 conv_enc_test: conv_enc_test.o testpdu.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 
