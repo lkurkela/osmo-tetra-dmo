@@ -33,6 +33,7 @@
 
 #include <zmq.h>
 #include "suo.h"
+#include "pdus.h"
 
 #include <signal.h>
 
@@ -233,77 +234,25 @@ int bits_to_floats(const struct frame *in, struct frame *out, size_t maxlen)
 
 int build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out)
 {
-    uint8_t pdu_sync_SCHS[8];		/* 60 bits */
-    uint8_t pdu_sync_SCHH[16];	    /* 124 bits */
+    uint8_t dn232_dn233 = DN233 | (DN232 << 2);    
+    dm_sync_pres_pdu_schs(tn, fn, frame_countdown, dn232_dn233, DT254);
+    dm_sync_pdu_schh(REP_ADDRESS, REP_MCC, REP_MNC);
 
-    struct bitvec bv;
+    uint8_t sb_type2[80];
+    uint8_t sb_master[80*4];
+    uint8_t sb_type3[120];
+    uint8_t sb_type4[120];
+    uint8_t sb_type5[120];
 
-	memset(&bv, 0, sizeof(bv));
-	bv.data = pdu_sync_SCHS;
-	bv.data_len = sizeof(pdu_sync_SCHS);
-
-    uint8_t dn232_dn233 = DN233 | (DN232 << 2);
-
-	//bitvec_set_uint(&bv, 0, 4);	/* alignment */
-	/* According to Table 21.73: SYNC PDU Contents */
-	bitvec_set_uint(&bv, 13, 4);	/* System Code  */
-	bitvec_set_uint(&bv, 1, 2);	    /* Sync PDU type */
-	bitvec_set_uint(&bv, 1, 2);	    /* Communication Type */
-    bitvec_set_uint(&bv, 0, 1);	    /* M-DMO flag */
-    bitvec_set_uint(&bv, 0, 2);	    /* Reserved */
-    bitvec_set_uint(&bv, 0, 1);	    /* Two-frequency repeater flag */
-    bitvec_set_uint(&bv, 0, 2);	    /* Repeater operating modes */
-    bitvec_set_uint(&bv, 0, 6);	    /* Spacing of uplink */
-    bitvec_set_uint(&bv, 0, 1);	    /* Master/slave link flag */
-    bitvec_set_uint(&bv, 0, 2);	    /* Channel usage */
-    bitvec_set_uint(&bv, 0, 2);	    /* Channel state */
-    bitvec_set_uint(&bv, tn, 2);	/* Slot number */
-	bitvec_set_uint(&bv, fn, 5);	/* Frame number */
-    bitvec_set_uint(&bv, 1, 3);	    /* Power class */
-    bitvec_set_uint(&bv, 1, 1);	    /* Power control flag */
-    bitvec_set_uint(&bv, 0, 1);	    /* Reserved */
-    bitvec_set_uint(&bv, frame_countdown, 2);	/* Frame countdown */
-    bitvec_set_uint(&bv, 0, 2);	    /* Reserved / priority */
-    bitvec_set_uint(&bv, 0, 6);	    /* Reserved */
-    bitvec_set_uint(&bv, dn232_dn233, 4);	    /* Values of DN232 and DN233 */
-    bitvec_set_uint(&bv, DT254, 3); /* Value of DT254 */
-    bitvec_set_uint(&bv, 0, 1);	    /* Presence signal dual watch sync flag */
-    bitvec_set_uint(&bv, 0, 5);	    /* Reserved */
-
-	// printf("DPRES-SYNC SCH/S PDU: %s ", osmo_hexdump(pdu_sync_SCHS, sizeof(pdu_sync_SCHS)));
-
-	memset(&bv, 0, sizeof(bv));
-	bv.data = pdu_sync_SCHH;
-	bv.data_len = sizeof(pdu_sync_SCHH);
-
-    bitvec_set_uint(&bv, REP_ADDRESS, 10);	/* Repeater address */
-    bitvec_set_uint(&bv, REP_MCC, 10);	    /* Repeater MNI-MCC */
-    bitvec_set_uint(&bv, REP_MNC, 14);	    /* Repeater MNI-MNC */
-	bitvec_set_uint(&bv, 3, 2);	    /* Validity time unit (3=not restricted) */
-    bitvec_set_uint(&bv, 0, 6);	    /* Validity time unit count */
-	bitvec_set_uint(&bv, 1, 3);	    /* Max DM-MS power class */
-	bitvec_set_uint(&bv, 0, 1);	    /* Reserved */
-	bitvec_set_uint(&bv, 0, 4);	    /* Usage restriction type (URT) */
-    bitvec_set_uint(&bv, 0, 72);	/* URT addressing  */
-	bitvec_set_uint(&bv, 0, 2);	    /* Reserved */
-
-	// printf(" SCH/H PDU: %s\n", osmo_hexdump(pdu_sync_SCHH, sizeof(pdu_sync_SCHH)));
-
-	uint8_t sb_type2[80];
-	uint8_t sb_master[80*4];
-	uint8_t sb_type3[120];
-	uint8_t sb_type4[120];
-	uint8_t sb_type5[120];
-
-	uint8_t si_type2[140];
-	uint8_t si_master[144*4];
-	uint8_t si_type3[216];
-	uint8_t si_type4[216];
-	uint8_t si_type5[216];
+    uint8_t si_type2[140];
+    uint8_t si_master[144*4];
+    uint8_t si_type3[216];
+    uint8_t si_type4[216];
+    uint8_t si_type5[216];
 
     //uint8_t burst[255*2];
-	uint16_t crc;
-	uint8_t *cur;
+    uint16_t crc;
+    uint8_t *cur;
 
 	memset(sb_type2, 0, sizeof(sb_type2));
 	cur = sb_type2;
