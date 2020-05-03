@@ -93,7 +93,7 @@ void dp_sap_udata_req(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
     struct timeslot *burst_slot;
     burst_slot = &frame_buf_master.tn[slotnum];
     memcpy(burst_slot->burst, bits, len);
-    burst_slot->len = 510;
+    burst_slot->len = len;
 
     if (tms_req->channel_state != tms->channel_state) {
         tms->channel_state = tms_req->channel_state;

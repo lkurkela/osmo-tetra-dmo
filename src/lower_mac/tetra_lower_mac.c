@@ -256,6 +256,8 @@ int build_encoded_block_sch(enum dp_sap_data_type type, uint8_t *in, uint8_t *ou
 
 	memcpy(out, type5, tbp->type345_bits);
 
+	return tbp->type345_bits;
+
 }
 
 struct tetra_tmvsap_prim *tmvsap_prim_alloc(uint16_t prim, uint8_t op)
@@ -709,9 +711,9 @@ int rx_dmv_unitdata_req(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_state *
 
 	} else if (tup->lchan == TETRA_LC_SCH_H) {
 		build_encoded_block_sch(DPSAP_T_SCH_H, msg->l1h, sch_burst->block2);
-		build_dm_sync_burst(burst, sch_burst->block1, sch_burst->block2); 
-		printf("SYNC burst: %s\n", osmo_ubit_dump(burst, 255*2));
-		dp_sap_udata_req(DPSAP_T_SCH_H, burst, 510, tup->tdma_time, tms);				
+		int len = build_dm_sync_burst(burst, sch_burst->block1, sch_burst->block2); 
+		printf("SYNC burst: %s\n", osmo_ubit_dump(burst, len));
+		dp_sap_udata_req(DPSAP_T_SCH_H, burst, len, tup->tdma_time, tms);				
 
 	} else {
 		printf("puf");
@@ -720,5 +722,6 @@ int rx_dmv_unitdata_req(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_state *
     
     // printf("DPRES-SYNC burst: %s\n", osmo_ubit_dump(burst, 255*2));
     // memcpy(out, burst, 510);
+	return 0;
 
 }
