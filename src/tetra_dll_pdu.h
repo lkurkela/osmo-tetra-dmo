@@ -1,6 +1,7 @@
 #ifndef TETRA_DLL_PDU_H
 #define TETRA_DLL_PDU_H
 
+#include <stdbool.h>
 #include <osmocom/core/linuxlist.h>
 
 /* Table 21.1 */

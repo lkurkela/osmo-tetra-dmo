@@ -30,5 +30,6 @@ int mac_request_tx_buffer_content(uint8_t *bits, struct timing_slot *slot);
 void mac_dp_sap_udata_ind_filter(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv, struct timing_slot *slot);
 
 void dp_sap_udata_req(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, struct tetra_tdma_time tdma_time, struct tetra_mac_state *tms_req);
+void dpc_sap_udata_req(struct tetra_mac_state *tms_req);
 
 #endif

@@ -698,6 +698,13 @@ void tp_sap_udata_ind(enum tp_sap_data_type type, const uint8_t *bits, unsigned 
 /* used by layer 3 to deliver received message to layer 2 */
 int rx_dmv_unitdata_req(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_state *tms)
 {
+
+	// change the channel state only, aka call DPC-SAP
+	if (dmvp == NULL) {
+		dpc_sap_udata_req(tms);
+		return 0;
+	}
+
 	struct dmv_unitdata_param *tup = &dmvp->u.unitdata;
 	struct msgb *msg = dmvp->oph.msg;
 	uint8_t pdu_type = bits_to_uint(msg->l1h, 2);

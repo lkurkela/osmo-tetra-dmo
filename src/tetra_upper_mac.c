@@ -42,6 +42,7 @@
 #include "tetra_gsmtap.h"
 #include "lower_mac/tetra_lower_mac.h"
 #include "hamtetra_config.h"
+#include "hamtetra_pdu_generator.h"
 
 static int rx_tm_sdu(struct tetra_mac_state *tms, struct msgb *msg, unsigned int len);
 
@@ -882,32 +883,11 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 					time->tn = tn;
 					time->link = DM_LINK_SLAVE;
 
-					uint8_t pdu_sync_SCHS[8];		/* 60 bits */
-					uint8_t pdu_sync_SCHH[16];	    /* 124 bits */
 					uint8_t sb_type2[80];
-					uint8_t si_type2[140];
-
-					struct bitvec bv;
-					memset(&bv, 0, sizeof(bv));
-					bv.data = pdu_sync_SCHS;
-					bv.data_len = sizeof(pdu_sync_SCHS);
-
-					bitvec_set_uint(&bv, pdu_dmac_sync->system_code, 4);	/* System Code  */
-					bitvec_set_uint(&bv, 0, 2);	    /* Sync PDU type */
-					bitvec_set_uint(&bv, 1, 2);	    /* Communication Type */
-					bitvec_set_uint(&bv, 0, 1);	    /* Master/slave link flag */
-					bitvec_set_uint(&bv, 0, 1);	    /* Gateway generated message flag */
-					bitvec_set_uint(&bv, 0, 2);	    /* A/B channel usage */
-					bitvec_set_uint(&bv, tn, 2);	/* Slot number */
-					bitvec_set_uint(&bv, out_fn+fn, 5);	/* Frame number */
-					bitvec_set_uint(&bv, pdu_dmac_sync->airint_encryption_state, 2);   /* Air interface encryption state */
-					bitvec_set_uint(&bv, 0, 39);	    /* Reserved, encryption not yet supported */
-
-					osmo_pbit2ubit(sb_type2, pdu_sync_SCHS, 60);
+					int len = build_pdu_dmac_sync_schs(pdu_dmac_sync, out_fn+fn, tn, 0, sb_type2);
 
 					printf("DMV-SAP SCH/S %s - ", osmo_ubit_dump(sb_type2, 60));
 					d_unitdata_param->lchan = TETRA_LC_SCH_S;
-					
 
 					msg->l1h = msgb_put(msg, 60);
 					memcpy(msg->l1h, sb_type2, 60);
@@ -923,43 +903,18 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 					time->tn = tn;
 					time->link = DM_LINK_SLAVE;
 
-					memset(&bv, 0, sizeof(bv));
-					bv.data = pdu_sync_SCHH;
-					bv.data_len = sizeof(pdu_sync_SCHH);
-
-					bitvec_set_uint(&bv, pdu_dmac_sync->repgw_address, 10);	/* Repeater address */
-					bitvec_set_uint(&bv, pdu_dmac_sync->fillbit_indication, 1);	    /* Fillbit indication */
-					bitvec_set_uint(&bv, pdu_dmac_sync->fragmentation_flag, 1);	    /* Fragment flag */
-					bitvec_set_uint(&bv, 1-fn, 2);	    /* frame countdown */
-					bitvec_set_uint(&bv, pdu_dmac_sync->dest_address_type, 2);	    /* destination address type */
-					bitvec_set_uint(&bv, pdu_dmac_sync->dest_address, 24);	    /* destination address */
-					bitvec_set_uint(&bv, pdu_dmac_sync->src_address_type, 2);	    /* source address type */
-					bitvec_set_uint(&bv, pdu_dmac_sync->src_address, 24);	    /* source address */
-					bitvec_set_uint(&bv, pdu_dmac_sync->mni, 24);	/* MNI  */
-					bitvec_set_uint(&bv, pdu_dmac_sync->message_type, 5);	    /* Message type */
-					// bitvec_set_uint(&bv, pdu_dmac_sync->message_fields, pdu_dmac_sync->message_fields_len);	    /* Message dependent elements */
-					// bitvec_add_array(&bv, pdu_dmac_sync->message_fields, pdu_dmac_sync->message_fields_len, false, 8);
-					for (int i=0; i<pdu_dmac_sync->message_fields_len; i++) {
-						bitvec_set_uint(&bv, pdu_dmac_sync->message_fields[i], 1);
-					}
-					// bitvec_set_uint(&bv, pdu_dmac_sync->dm_sdu, pdu_dmac_sync->dm_sdu_len);	    /* DM-SDU */
-					// bitvec_add_array(&bv, pdu_dmac_sync->dm_sdu, pdu_dmac_sync->dm_sdu_len, false, 8);
-					for (int i=0; i<pdu_dmac_sync->dm_sdu_len; i++) {
-						bitvec_set_uint(&bv, pdu_dmac_sync->dm_sdu[i], 1);
-					}
-					if (pdu_dmac_sync->fillbit_indication==1) {
-						bitvec_set_uint(&bv, 1, 1);
-					}
-					d_unitdata_param->lchan = TETRA_LC_SCH_H;
-					osmo_pbit2ubit(si_type2, pdu_sync_SCHH, 124);
+				    uint8_t si_type2[140];
+					len = build_pdu_dmac_sync_schh(pdu_dmac_sync, out_fn+fn, tn, 0, si_type2);
 
 					printf(" SCH/H - %s\n", osmo_ubit_dump(si_type2, 124));
+				    d_unitdata_param->lchan = TETRA_LC_SCH_H;
+
 					msg->l1h = msgb_put(msg, 124);
 					memcpy(msg->l1h, si_type2, 124);
 
-					tms->channel_state = DM_CHANNEL_S_DMREP_ACTIVE_OCCUPIED;
-
 					rx_dmv_unitdata_req(tdp, tms);
+
+					tms->channel_state = DM_CHANNEL_S_DMREP_ACTIVE_OCCUPIED;
 
 				}
 
@@ -971,7 +926,79 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == 8 && pdu_dmac_sync->processed==true) {
 			printf("ignoring the repetitive DMAC-SYNC from DM-MASTER\n");
 
+		// DMAC-SYNC DM-OCCUPIED
+		} else if (tms->channel_state == DM_CHANNEL_S_DMREP_ACTIVE_OCCUPIED && pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == DM_OCCUPIED)  {
+			// repeat DMAC-SYNC burst
+			struct tetra_dmvsap_prim *tdp;
+			struct dmv_unitdata_param *d_unitdata_param;
+			struct msgb *msg;
+
+			uint32_t dcc_srcaddr = pdu_dmac_sync->src_address & 0xffffff;;
+			uint32_t colour_code = (dcc_srcaddr) | (my_repaddr << 24); 
+
+			/* build DMAC-SYNC SCH/S part */
+			tdp = dmvsap_prim_alloc(PRIM_DMV_UNITDATA, PRIM_OP_REQUEST);
+			msg = tdp->oph.msg;
+			d_unitdata_param = &tdp->u.unitdata;
+			d_unitdata_param->colour_code = colour_code;
+			struct tetra_tdma_time *time = &d_unitdata_param->tdma_time;
+			time->fn = pdu_dmac_sync->frame_number;
+			time->tn = pdu_dmac_sync->slot_number;
+			time->link = DM_LINK_SLAVE;
+
+			uint8_t sb_type2[80];
+			int len = build_pdu_dmac_sync_schs(pdu_dmac_sync, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, sb_type2);
+
+			printf("DMV-SAP SCH/S %s - ", osmo_ubit_dump(sb_type2, 60));
+			d_unitdata_param->lchan = TETRA_LC_SCH_S;
+
+			msg->l1h = msgb_put(msg, 60);
+			memcpy(msg->l1h, sb_type2, 60);
+			rx_dmv_unitdata_req(tdp, tms);
+
+			/* build DMAC-SYNC SCH/H part */
+			tdp = dmvsap_prim_alloc(PRIM_DMV_UNITDATA, PRIM_OP_REQUEST);
+			msg = tdp->oph.msg;
+			d_unitdata_param = &tdp->u.unitdata;
+			d_unitdata_param->colour_code = colour_code;
+			time = &d_unitdata_param->tdma_time;
+			time->fn = pdu_dmac_sync->frame_number;
+			time->tn = pdu_dmac_sync->slot_number;
+			time->link = DM_LINK_SLAVE;
+
+			uint8_t si_type2[140];
+			len = build_pdu_dmac_sync_schh(pdu_dmac_sync, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, si_type2);
+
+			printf(" SCH/H - %s\n", osmo_ubit_dump(si_type2, 124));
+			d_unitdata_param->lchan = TETRA_LC_SCH_H;
+
+			msg->l1h = msgb_put(msg, 124);
+			memcpy(msg->l1h, si_type2, 124);
+
+			rx_dmv_unitdata_req(tdp, tms);
+
+
+			tms->channel_state_last_chg = 0; // reset counter for keepalive
+
+		// DMAC-SYNC DM-RELEASE - change channel state to free
+		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == DM_RELEASE) {
+			
+			tms->channel_state = DM_CHANNEL_S_DMREP_IDLE_FREE;
+			tms->channel_state_last_chg = 0;
+
+			rx_dmv_unitdata_req(NULL, tms);
+
+		// DMAC-SYNC DM-RESERVED
+		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == DM_RESERVED) {
+			
+			tms->channel_state = DM_CHANNEL_S_DMREP_ACTIVE_RESERVED;
+			tms->channel_state_last_chg = 0;
+
+			rx_dmv_unitdata_req(NULL, tms);
+
 		}
+
+
 
 		int slot = 0;
 		// uint8_t fillbits_present=bits_to_uint(bits+10, 1); 
@@ -1004,7 +1031,7 @@ static int rx_dmv_unitdata_ind(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_
 
 	if (tup->lchan == TETRA_LC_SCH_S || tup->lchan == TETRA_LC_SCH_H) {
 		pdu_name = "SYNC";
-		tms->channel_state = DM_CHANNEL_S_DMREP_IDLE_OCCUPIED;
+		// tms->channel_state = DM_CHANNEL_S_DMREP_IDLE_OCCUPIED;
 	} else {
 		pdu_type = bits_to_uint(msg->l1h, 2);
 		pdu_name = tetra_get_dmacpdu_name(pdu_type);

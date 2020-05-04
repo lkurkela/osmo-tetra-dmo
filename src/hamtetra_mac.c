@@ -102,6 +102,19 @@ void dp_sap_udata_req(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 
 }
 
+void dpc_sap_udata_req(struct tetra_mac_state *tms_req)
+{
+    if (tms_req->channel_state != tms->channel_state) {
+        tms->channel_state = tms_req->channel_state;
+        tms->channel_state_last_chg = 0;
+    }
+
+    if (tms_req->channel_state_last_chg != tms->channel_state_last_chg) {
+        tms->channel_state_last_chg = tms_req->channel_state_last_chg;
+    }
+
+}
+
 
 unsigned int multiframe_counter = 0;
 uint8_t multiframes_since_last_presence = 0;
@@ -147,7 +160,7 @@ int mac_request_tx_buffer_content(uint8_t *bits, struct timing_slot *slot)
             // send DPRES-SYNC presence signal burst periodically on IDLE channel
             if (--presence_signal_counter < (DN253*4)){
                 uint8_t countdown = (presence_signal_counter-1) / 4;
-                len = build_pdu_dpress_sync(slot->fn, slot->tn, countdown, bits);
+                len = build_pdu_dpress_sync(slot->fn, slot->tn, countdown, 0, bits);
                 if (presence_signal_counter == 0) {
                     presence_signal_counter = presence_signal_multiframe_count[DT254]*18*4;
                 }
@@ -159,15 +172,32 @@ int mac_request_tx_buffer_content(uint8_t *bits, struct timing_slot *slot)
 
         case DM_CHANNEL_S_DMREP_ACTIVE_OCCUPIED:
             printf("[DM_CHANNEL_S_DMREP_ACTIVE_OCCUPIED] last chg: %ld - TX slot: %2u %2u %2u", tms->channel_state_last_chg, slot->tn, slot->fn, slot->mn);
+
+            // Send DM-REP presence signal in DSB in slot 3 at frames 1, 7 and 13 (master-link)
+            if (frame_buf_master.tn[slotnum].len < 1) {
+                if ((slot->fn == 1 || slot->fn == 7 || slot->fn==13) && slot->tn == 3) {
+                    len = build_pdu_dpress_sync(slot->fn, slot->tn, 0, 1, bits);
+                    sent_buffer_set(slot, len);
+                    printf(" - burst len: %d\n", len);
+                    return len;
+                }
+
+            }
             break;
 
         case DM_CHANNEL_S_DMREP_ACTIVE_RESERVED:
             printf("[DM_CHANNEL_S_DMREP_ACTIVE_RESERVED] last chg: %ld - TX slot: %2u %2u %2u", tms->channel_state_last_chg, slot->tn, slot->fn, slot->mn);
+
+            // Channel in reserved state over 5 multiframes without any bursts? Most probably an error so reset state back to IDLE
+            if (tms->channel_state_last_chg>360) {
+                tms->channel_state = DM_CHANNEL_S_DMREP_IDLE_FREE;
+                tms->channel_state_last_chg = 0;
+            }
             break;
 
 
         default:
-            printf("[STATE %d] last chg: %ld - TX slot: %2u %2u %2u", tms->channel_state, tms->channel_state_last_chg, slot->tn, slot->fn, slot->mn);
+            printf("[STATE %d] last chg: %ld - TX slot: %2u %2u %2u", tms->channel_state, tms->channel_state_last_chg, slot->tn, slot->fn, slot->mn); 
             break;
 
     }
