@@ -94,6 +94,7 @@ struct tetra_mac_state {
 	enum tetra_infrastructure_mode infra_mode;
 	enum dm_channel_state channel_state;
 	uint64_t channel_state_last_chg;
+	struct timing_slot *slot;
 };
 
 void tetra_mac_state_init(struct tetra_mac_state *tms);

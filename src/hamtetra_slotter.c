@@ -56,8 +56,9 @@ int slotter_rx_burst(struct slotter_state *s, const uint8_t *bits, int len, stru
 	t_phy_state.time.mn = slot->mn;
 
 	slot->changed = 0;
+	s->tms->slot = slot;
 	enum tetra_train_seq ts = tetra_check_train(bits, len);
-	tetra_burst_dmo_rx_cb2(bits, len, ts, s->tms, slot);
+	tetra_burst_dmo_rx_cb2(bits, len, ts, s->tms);
 
 	// if lower mac resyncronizes the frame timings based on SCH/S burst
 	if (slot->changed>0) {

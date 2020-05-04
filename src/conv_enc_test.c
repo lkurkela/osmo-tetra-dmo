@@ -50,7 +50,7 @@ void tp_sap_udata_ind(enum tp_sap_data_type type, const uint8_t *bits, unsigned 
 }
 
 /* incoming DP-SAP UNITDATA.ind  from PHY into lower MAC */
-void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv, struct timing_slot *slot)
+void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv)
 {
 }
 

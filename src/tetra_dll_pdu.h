@@ -62,6 +62,7 @@ struct tetra_dmo_pdu_dmac_sync {
 	uint8_t dm_sdu[128]; //message 
 	uint8_t dm_sdu_len;
 	bool processed;
+	uint32_t dm_colour_code;
 };
 static struct tetra_dmo_pdu_dmac_sync _pdu_dmac_sync, *pdu_dmac_sync = &_pdu_dmac_sync;
 

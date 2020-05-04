@@ -97,7 +97,9 @@ void dp_sap_udata_req(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 
     if (tms_req->channel_state != tms->channel_state) {
         tms->channel_state = tms_req->channel_state;
-        tms->channel_state_last_chg = 0;
+    }
+    if (tms_req->channel_state_last_chg != tms->channel_state_last_chg) {
+        tms->channel_state_last_chg = tms_req->channel_state_last_chg;
     }
 
 }
@@ -106,9 +108,7 @@ void dpc_sap_udata_req(struct tetra_mac_state *tms_req)
 {
     if (tms_req->channel_state != tms->channel_state) {
         tms->channel_state = tms_req->channel_state;
-        tms->channel_state_last_chg = 0;
     }
-
     if (tms_req->channel_state_last_chg != tms->channel_state_last_chg) {
         tms->channel_state_last_chg = tms_req->channel_state_last_chg;
     }
@@ -222,14 +222,15 @@ int mac_request_tx_buffer_content(uint8_t *bits, struct timing_slot *slot)
 }
 
 /* intermediate function between PHY and lower mac DP-SAP unitdata indicate function to maintain state of the channel and filter echos */
-void mac_dp_sap_udata_ind_filter(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv, struct timing_slot *slot)
+void mac_dp_sap_udata_ind_filter(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv)
 {
-    
+    struct tetra_mac_state *tms = priv;
+    struct timing_slot *slot = tms->slot;
     int flen = sent_buffer_get(slot);
     // if everything good, pass parameter through
     if (flen < 0 || slot->changed==1) {
         // printf("mac_dp_sap_udata_ind_filter says hello (%d/%d:%d)\n", slot->fn, slot->tn, flen);
-        dp_sap_udata_ind(type, bits, len, priv, slot);
+        dp_sap_udata_ind(type, bits, len, priv);
     } else {
         printf("[MAC FILTER] burst filtered (%d/%d:%d)\n", slot->fn, slot->tn, flen);
 

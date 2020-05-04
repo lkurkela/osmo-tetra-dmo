@@ -288,7 +288,7 @@ struct tetra_dmvsap_prim *dmvsap_prim_alloc(uint16_t prim, uint8_t op)
 
 
 /* incoming DP-SAP UNITDATA.ind  from PHY into lower MAC */
-void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv, struct timing_slot *slot)
+void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned int len, void *priv)
 {
 	/* various intermediary buffers */
 	uint8_t type4[512];
@@ -298,6 +298,7 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 
 	const struct tetra_blk_param *tbp = &tetra_blk_param[type];
 	struct tetra_mac_state *tms = priv;
+	struct timing_slot *slot = tms->slot;
 	const char *time_str;
 
 	/* DMV-SAP.UNITDATA.ind primitive which we will send to the upper MAC */

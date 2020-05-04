@@ -494,34 +494,24 @@ void tetra_burst_dmo_rx_cb(const uint8_t *burst, unsigned int len, enum tetra_tr
 {
 	uint8_t dnbf_buf[2*DMO_DNB_BLK_BITS];
 
-	// backwards compatibility patch to fool compiler
-	struct timing_slot sync_slot = {
-		.time = 0,
-		.diff = 0, // not used
-		.tn = 1,
-		.fn = 1,
-		.mn = 1
-	};
-
-
 	switch (type) {
 	case TETRA_TRAIN_SYNC:
 		/* Split SB1, SB2 Block */
 		/* send parts of the burst via DP-SAP into lower MAC */
-		dp_sap_udata_ind(DPSAP_T_SCH_S, burst+DMO_SB_BLK1_OFFSET, DMO_SB_BLK1_BITS, priv, &sync_slot);
-		dp_sap_udata_ind(DPSAP_T_SCH_H, burst+DMO_SB_BLK2_OFFSET, DMO_SB_BLK2_BITS, priv, &sync_slot);
+		dp_sap_udata_ind(DPSAP_T_SCH_S, burst+DMO_SB_BLK1_OFFSET, DMO_SB_BLK1_BITS, priv);
+		dp_sap_udata_ind(DPSAP_T_SCH_H, burst+DMO_SB_BLK2_OFFSET, DMO_SB_BLK2_BITS, priv);
 		break;
 	case TETRA_TRAIN_NORM_2:
 		/* send two logical channels of the DNB burst via DP-SAP into lower MAC (396-2 9.4.3.3.3) */
-		dp_sap_udata_ind(DPSAP_T_DNB1, burst+DMO_DNB_BLK1_OFFSET, DMO_DNB_BLK_BITS, priv, &sync_slot);
-		dp_sap_udata_ind(DPSAP_T_DNB1, burst+DMO_DNB_BLK2_OFFSET, DMO_DNB_BLK_BITS, priv, &sync_slot);
+		dp_sap_udata_ind(DPSAP_T_DNB1, burst+DMO_DNB_BLK1_OFFSET, DMO_DNB_BLK_BITS, priv);
+		dp_sap_udata_ind(DPSAP_T_DNB1, burst+DMO_DNB_BLK2_OFFSET, DMO_DNB_BLK_BITS, priv);
 		break;
 	case TETRA_TRAIN_NORM_1:
 		/* re-combine the two block parts */
 		memcpy(dnbf_buf, burst+DMO_DNB_BLK1_OFFSET, DMO_DNB_BLK_BITS);
 		memcpy(dnbf_buf+DMO_DNB_BLK_BITS, burst+DMO_DNB_BLK2_OFFSET, DMO_DNB_BLK_BITS);
 		/* send one logical channel of the DNB burst via DP-SAP into lower MAC */
-		dp_sap_udata_ind(DPSAP_T_SCH_F, dnbf_buf, 2*DMO_DNB_BLK_BITS, priv, &sync_slot);
+		dp_sap_udata_ind(DPSAP_T_SCH_F, dnbf_buf, 2*DMO_DNB_BLK_BITS, priv);
 		break;
 	default:
 		printf("#### hello from burst with to-do training sequence\n");
@@ -543,7 +533,7 @@ static int count_errs(const uint8_t *a, const uint8_t *b, int len)
 
 /* Note: this may use different indexing for the bits
  * than tetra_burst_dmo_rx_cb. */
-void tetra_burst_dmo_rx_cb2(const uint8_t *burst, unsigned int len, enum tetra_train_seq type, void *priv, struct timing_slot *slot)
+void tetra_burst_dmo_rx_cb2(const uint8_t *burst, unsigned int len, enum tetra_train_seq type, void *priv)
 {
 	uint8_t dnbf_buf[2*DMO_DNB_BLK_BITS];
 
@@ -552,15 +542,15 @@ void tetra_burst_dmo_rx_cb2(const uint8_t *burst, unsigned int len, enum tetra_t
 		const struct dmo_sync_bits *b = (void*)burst;
 		/* Split SB1, SB2 Block */
 		/* send parts of the burst via DP-SAP into lower MAC */
-		mac_dp_sap_udata_ind_filter(DPSAP_T_SCH_S, b->block1, sizeof(b->block1), priv, slot);
-		mac_dp_sap_udata_ind_filter(DPSAP_T_SCH_H, b->block2, sizeof(b->block2), priv, slot);
+		mac_dp_sap_udata_ind_filter(DPSAP_T_SCH_S, b->block1, sizeof(b->block1), priv);
+		mac_dp_sap_udata_ind_filter(DPSAP_T_SCH_H, b->block2, sizeof(b->block2), priv);
 		break;
 	}
 	case TETRA_TRAIN_NORM_2: {
 		const struct dmo_normal_bits *b = (void*)burst;
 		/* send two logical channels of the DNB burst via DP-SAP into lower MAC (396-2 9.4.3.3.3) */
-		mac_dp_sap_udata_ind_filter(DPSAP_T_STCH, b->block1, sizeof(b->block1), priv, slot);
-		mac_dp_sap_udata_ind_filter(DPSAP_T_DNB1, b->block2, sizeof(b->block2), priv, slot);
+		mac_dp_sap_udata_ind_filter(DPSAP_T_STCH, b->block1, sizeof(b->block1), priv);
+		mac_dp_sap_udata_ind_filter(DPSAP_T_DNB1, b->block2, sizeof(b->block2), priv);
 		break;
 	}
 	case TETRA_TRAIN_NORM_1: {
@@ -569,7 +559,7 @@ void tetra_burst_dmo_rx_cb2(const uint8_t *burst, unsigned int len, enum tetra_t
 		memcpy(dnbf_buf, b->block1, DMO_DNB_BLK_BITS);
 		memcpy(dnbf_buf + DMO_DNB_BLK_BITS, b->block2, DMO_DNB_BLK_BITS);
 		/* send one logical channel of the DNB burst via DP-SAP into lower MAC */
-		mac_dp_sap_udata_ind_filter(DPSAP_T_SCH_F, dnbf_buf, 2*DMO_DNB_BLK_BITS, priv, slot);
+		mac_dp_sap_udata_ind_filter(DPSAP_T_SCH_F, dnbf_buf, 2*DMO_DNB_BLK_BITS, priv);
 		break;
 	}
 	default:

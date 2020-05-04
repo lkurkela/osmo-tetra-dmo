@@ -713,13 +713,36 @@ int rx_dm_dmacsync_sch_h(uint8_t *bits, struct tetra_dmo_pdu_dmac_sync *sync) {
 	pointer = pointer + 5;
 
 	switch(pdu_dmac_sync->message_type) {
-		case 8: //DM-SETUP
+		case DM_SETUP: 
 			memcpy(pdu_dmac_sync->message_fields, bits+pointer, 21);
 			pdu_dmac_sync->message_fields_len = 21;
 			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer+21, 5);
 			pdu_dmac_sync->dm_sdu_len = 5;
 			break;
+		case DM_OCCUPIED:
+			memcpy(pdu_dmac_sync->message_fields, bits+pointer, 21);
+			pdu_dmac_sync->message_fields_len = 21;
+			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer+21, 5);
+			pdu_dmac_sync->dm_sdu_len = 5;
+		break;
+		case DM_RELEASE:
+			// memcpy(pdu_dmac_sync->message_fields, bits+pointer, 21);
+			pdu_dmac_sync->message_fields_len = 0;
+			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer, 9);
+			pdu_dmac_sync->dm_sdu_len = 9;
+		break;
+		case DM_TX_CEASED:
+			memcpy(pdu_dmac_sync->message_fields, bits+pointer, 32);
+			pdu_dmac_sync->message_fields_len = 32;
+			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer+32, 4);
+			pdu_dmac_sync->dm_sdu_len = 4;
+		break;
+
 	}
+
+	uint8_t dcc_rep = pdu_dmac_sync->repgw_address & 0x3f;
+	uint32_t dcc_srcaddr = pdu_dmac_sync->src_address & 0xffffff;;
+	pdu_dmac_sync->dm_colour_code = (dcc_srcaddr) | (dcc_rep << 24); 
 
 	return pointer;
 
@@ -766,6 +789,54 @@ int rx_dm_dpressync_sch_h(uint8_t *bits, struct tetra_dmo_pdu_dpres_sync *sync) 
 
 	return pointer;
 
+}
+
+void send_dmac_sync_burst(struct tetra_dmo_pdu_dmac_sync *dmac_sync, uint8_t fn, uint8_t tn, uint8_t frame_countdown, struct tetra_mac_state *tms) 
+{
+	struct tetra_dmvsap_prim *tdp;
+	struct dmv_unitdata_param *d_unitdata_param;
+	struct msgb *msg;
+
+	/* build DMAC-SYNC SCH/S part */
+	tdp = dmvsap_prim_alloc(PRIM_DMV_UNITDATA, PRIM_OP_REQUEST);
+	msg = tdp->oph.msg;
+	d_unitdata_param = &tdp->u.unitdata;
+	d_unitdata_param->colour_code = dmac_sync->dm_colour_code;
+	struct tetra_tdma_time *time = &d_unitdata_param->tdma_time;
+	time->fn = fn;
+	time->tn = tn;
+	time->link = DM_LINK_SLAVE;
+
+	uint8_t sb_type2[80];
+	int len = build_pdu_dmac_sync_schs(dmac_sync, fn, tn, 0, sb_type2);
+
+	printf("DMV-SAP SCH/S %s - ", osmo_ubit_dump(sb_type2, 60));
+	d_unitdata_param->lchan = TETRA_LC_SCH_S;
+
+	msg->l1h = msgb_put(msg, 60);
+	memcpy(msg->l1h, sb_type2, 60);
+	rx_dmv_unitdata_req(tdp, tms);
+
+	/* build DMAC-SYNC SCH/H part */
+	tdp = dmvsap_prim_alloc(PRIM_DMV_UNITDATA, PRIM_OP_REQUEST);
+	msg = tdp->oph.msg;
+	d_unitdata_param = &tdp->u.unitdata;
+	d_unitdata_param->colour_code = dmac_sync->dm_colour_code;
+	time = &d_unitdata_param->tdma_time;
+	time->fn = fn;
+	time->tn = tn;
+	time->link = DM_LINK_SLAVE;
+
+	uint8_t si_type2[140];
+	len = build_pdu_dmac_sync_schh(dmac_sync, fn, tn, 0, si_type2);
+
+	printf(" SCH/H - %s\n", osmo_ubit_dump(si_type2, 124));
+	d_unitdata_param->lchan = TETRA_LC_SCH_H;
+
+	msg->l1h = msgb_put(msg, 124);
+	memcpy(msg->l1h, si_type2, 124);
+
+	rx_dmv_unitdata_req(tdp, tms);
 }
 
 static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_state *tms)
@@ -858,62 +929,13 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 			uint8_t out_fn = (pdu_dmac_sync->frame_number+master_fcountdown+1) % 18;
 			uint8_t out_tn = 1;
 
-			uint8_t dcc_rep = pdu_dmac_sync->repgw_address & 0x3f;
-			uint32_t dcc_srcaddr = pdu_dmac_sync->src_address & 0xffffff;;
-			uint32_t colour_code = (dcc_srcaddr) | (dcc_rep << 24); 
-
 			pdu_dmac_sync->processed = true;
 			printf("## we are gonna repeat - out starting at slave link FN: %d\n", out_fn);
 
-			for (int fn=0; fn<(DN232+1); fn++) { // TODO - use DN232 constant
+			for (int fn=0; fn<(DN232+1); fn++) { 
 
 				for (int tn=0; tn<4; tn++) {
-
-					struct tetra_dmvsap_prim *tdp;
-					struct dmv_unitdata_param *d_unitdata_param;
-					struct msgb *msg;
-
-					/* build DMAC-SYNC SCH/S part */
-					tdp = dmvsap_prim_alloc(PRIM_DMV_UNITDATA, PRIM_OP_REQUEST);
-					msg = tdp->oph.msg;
-					d_unitdata_param = &tdp->u.unitdata;
-					d_unitdata_param->colour_code = colour_code;
-					struct tetra_tdma_time *time = &d_unitdata_param->tdma_time;
-					time->fn = out_fn+fn;
-					time->tn = tn;
-					time->link = DM_LINK_SLAVE;
-
-					uint8_t sb_type2[80];
-					int len = build_pdu_dmac_sync_schs(pdu_dmac_sync, out_fn+fn, tn, 0, sb_type2);
-
-					printf("DMV-SAP SCH/S %s - ", osmo_ubit_dump(sb_type2, 60));
-					d_unitdata_param->lchan = TETRA_LC_SCH_S;
-
-					msg->l1h = msgb_put(msg, 60);
-					memcpy(msg->l1h, sb_type2, 60);
-					rx_dmv_unitdata_req(tdp, tms);
-
-					/* build DMAC-SYNC SCH/H part */
-					tdp = dmvsap_prim_alloc(PRIM_DMV_UNITDATA, PRIM_OP_REQUEST);
-					msg = tdp->oph.msg;
-					d_unitdata_param = &tdp->u.unitdata;
-					d_unitdata_param->colour_code = colour_code;
-					time = &d_unitdata_param->tdma_time;
-					time->fn = out_fn+fn;
-					time->tn = tn;
-					time->link = DM_LINK_SLAVE;
-
-				    uint8_t si_type2[140];
-					len = build_pdu_dmac_sync_schh(pdu_dmac_sync, out_fn+fn, tn, 0, si_type2);
-
-					printf(" SCH/H - %s\n", osmo_ubit_dump(si_type2, 124));
-				    d_unitdata_param->lchan = TETRA_LC_SCH_H;
-
-					msg->l1h = msgb_put(msg, 124);
-					memcpy(msg->l1h, si_type2, 124);
-
-					rx_dmv_unitdata_req(tdp, tms);
-
+					send_dmac_sync_burst(pdu_dmac_sync, out_fn+fn, tn, (DN232+1-fn), tms);
 					tms->channel_state = DM_CHANNEL_S_DMREP_ACTIVE_OCCUPIED;
 
 				}
@@ -929,72 +951,25 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 		// DMAC-SYNC DM-OCCUPIED
 		} else if (tms->channel_state == DM_CHANNEL_S_DMREP_ACTIVE_OCCUPIED && pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == DM_OCCUPIED)  {
 			// repeat DMAC-SYNC burst
-			struct tetra_dmvsap_prim *tdp;
-			struct dmv_unitdata_param *d_unitdata_param;
-			struct msgb *msg;
-
-			uint32_t dcc_srcaddr = pdu_dmac_sync->src_address & 0xffffff;;
-			uint32_t colour_code = (dcc_srcaddr) | (my_repaddr << 24); 
-
-			/* build DMAC-SYNC SCH/S part */
-			tdp = dmvsap_prim_alloc(PRIM_DMV_UNITDATA, PRIM_OP_REQUEST);
-			msg = tdp->oph.msg;
-			d_unitdata_param = &tdp->u.unitdata;
-			d_unitdata_param->colour_code = colour_code;
-			struct tetra_tdma_time *time = &d_unitdata_param->tdma_time;
-			time->fn = pdu_dmac_sync->frame_number;
-			time->tn = pdu_dmac_sync->slot_number;
-			time->link = DM_LINK_SLAVE;
-
-			uint8_t sb_type2[80];
-			int len = build_pdu_dmac_sync_schs(pdu_dmac_sync, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, sb_type2);
-
-			printf("DMV-SAP SCH/S %s - ", osmo_ubit_dump(sb_type2, 60));
-			d_unitdata_param->lchan = TETRA_LC_SCH_S;
-
-			msg->l1h = msgb_put(msg, 60);
-			memcpy(msg->l1h, sb_type2, 60);
-			rx_dmv_unitdata_req(tdp, tms);
-
-			/* build DMAC-SYNC SCH/H part */
-			tdp = dmvsap_prim_alloc(PRIM_DMV_UNITDATA, PRIM_OP_REQUEST);
-			msg = tdp->oph.msg;
-			d_unitdata_param = &tdp->u.unitdata;
-			d_unitdata_param->colour_code = colour_code;
-			time = &d_unitdata_param->tdma_time;
-			time->fn = pdu_dmac_sync->frame_number;
-			time->tn = pdu_dmac_sync->slot_number;
-			time->link = DM_LINK_SLAVE;
-
-			uint8_t si_type2[140];
-			len = build_pdu_dmac_sync_schh(pdu_dmac_sync, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, si_type2);
-
-			printf(" SCH/H - %s\n", osmo_ubit_dump(si_type2, 124));
-			d_unitdata_param->lchan = TETRA_LC_SCH_H;
-
-			msg->l1h = msgb_put(msg, 124);
-			memcpy(msg->l1h, si_type2, 124);
-
-			rx_dmv_unitdata_req(tdp, tms);
-
-
 			tms->channel_state_last_chg = 0; // reset counter for keepalive
+			send_dmac_sync_burst(pdu_dmac_sync, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, tms);
+
 
 		// DMAC-SYNC DM-RELEASE - change channel state to free
 		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == DM_RELEASE) {
-			
 			tms->channel_state = DM_CHANNEL_S_DMREP_IDLE_FREE;
 			tms->channel_state_last_chg = 0;
+			send_dmac_sync_burst(pdu_dmac_sync, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, tms);
 
-			rx_dmv_unitdata_req(NULL, tms);
+			// rx_dmv_unitdata_req(NULL, tms);
 
 		// DMAC-SYNC DM-RESERVED
 		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == DM_RESERVED) {
-			
 			tms->channel_state = DM_CHANNEL_S_DMREP_ACTIVE_RESERVED;
 			tms->channel_state_last_chg = 0;
+			send_dmac_sync_burst(pdu_dmac_sync, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, tms);
 
-			rx_dmv_unitdata_req(NULL, tms);
+			// rx_dmv_unitdata_req(NULL, tms);
 
 		}
 
