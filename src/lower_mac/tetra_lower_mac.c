@@ -139,6 +139,12 @@ static const struct tetra_blk_param tetra_blk_param[] = {
 		.type2_bits	= 432,
 		.type1_bits	= 432
 	},
+	[DPSAP_T_TCH] = {
+		.name		= "TCH",
+		.type345_bits	= 432,
+		.type2_bits	= 432,
+		.type1_bits	= 432
+	},
 	[DPSAP_T_DNB1] = {
 		.name		= "DNB1",
 		.type345_bits	= 216,
@@ -260,6 +266,41 @@ int build_encoded_block_sch(enum dp_sap_data_type type, uint8_t *in, uint8_t *ou
 
 }
 
+int build_encoded_block_tch(enum dp_sap_data_type type, uint8_t *in, uint8_t *out)
+{
+	const struct tetra_blk_param *tbp = &tetra_blk_param[type];
+
+	uint8_t type5[512];
+	uint8_t type4[512];
+	uint8_t type3dp[512*4];
+	uint8_t type3[512];
+	uint8_t type2[512];
+
+    // uint8_t burst[255*2];
+	uint16_t crc;
+	uint8_t *cur;
+
+	memset(type2, 0, sizeof(type2));
+	cur = type2;
+
+	/* SYNC SCH/S */
+	// cur += osmo_pbit2ubit(type2, in, tbp->type1_bits);
+	memcpy(type2, in, tbp->type1_bits);
+	cur += tbp->type1_bits;
+
+    printf("TCH type1: %s ", osmo_ubit_dump(type2, tbp->type1_bits));
+
+	/* Run scrambling (all-zero): type-5 bits */
+	memcpy(type5, type2, tbp->type345_bits);
+	tetra_scramb_bits(SCRAMB_INIT, type5, tbp->type345_bits);
+	printf("TCH type5: %s\n", osmo_ubit_dump(type5, tbp->type345_bits));
+
+	memcpy(out, type5, tbp->type345_bits);
+
+	return tbp->type345_bits;
+
+}
+
 struct tetra_tmvsap_prim *tmvsap_prim_alloc(uint16_t prim, uint8_t op)
 {
 	struct tetra_tmvsap_prim *ttp;
@@ -278,7 +319,7 @@ struct tetra_dmvsap_prim *dmvsap_prim_alloc(uint16_t prim, uint8_t op)
 	struct tetra_dmvsap_prim *ttp;
 
 	ttp = talloc_zero(NULL, struct tetra_dmvsap_prim);
-	ttp->oph.msg = msgb_alloc(412, "dmvsap_prim");
+	ttp->oph.msg = msgb_alloc(432, "dmvsap_prim");
 	ttp->oph.sap = TETRA_SAP_DMV;
 	ttp->oph.primitive = prim;
 	ttp->oph.operation = op;
@@ -364,6 +405,11 @@ void dp_sap_udata_ind(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
 			printf("WRONG\n");
 	} else if (type == TPSAP_T_BBK) {
 		/* FIXME: RM3014-decode */
+		d_unitdata_param->crc_ok = 1;
+		memcpy(type2, type4, tbp->type2_bits);
+		DEBUGP("%s %s type1: %s\n", tbp->name, time_str,
+			osmo_ubit_dump(type2, tbp->type1_bits));
+	} else if (type == DPSAP_T_TCH) {
 		d_unitdata_param->crc_ok = 1;
 		memcpy(type2, type4, tbp->type2_bits);
 		DEBUGP("%s %s type1: %s\n", tbp->name, time_str,
@@ -722,6 +768,19 @@ int rx_dmv_unitdata_req(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_state *
 		int len = build_dm_sync_burst(burst, sch_burst->block1, sch_burst->block2); 
 		printf("SYNC burst: %s\n", osmo_ubit_dump(burst, len));
 		dp_sap_udata_req(DPSAP_T_SCH_H, burst, len, tup->tdma_time, tms);				
+
+	} else if (tup->lchan == TETRA_LC_TCH) {
+		uint8_t block12[432];
+		uint8_t block1[216];
+		uint8_t block2[216];
+
+		build_encoded_block_tch(DPSAP_T_TCH, msg->l1h, block12);
+		memcpy(block1, block12, 216);
+		memcpy(block2, block12+216, 216);
+
+		int len = build_dm_norm_burst(burst, block1, block2, 1);
+		printf("TCH burst: %s\n", osmo_ubit_dump(burst, len));
+		dp_sap_udata_req(DPSAP_T_TCH, burst, len, tup->tdma_time, tms);
 
 	} else {
 		printf("puf");

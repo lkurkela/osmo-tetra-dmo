@@ -536,6 +536,7 @@ static int count_errs(const uint8_t *a, const uint8_t *b, int len)
 void tetra_burst_dmo_rx_cb2(const uint8_t *burst, unsigned int len, enum tetra_train_seq type, void *priv)
 {
 	uint8_t dnbf_buf[2*DMO_DNB_BLK_BITS];
+	struct tetra_mac_state *tms = priv;
 
 	switch (type) {
 	case TETRA_TRAIN_SYNC: {
@@ -559,7 +560,11 @@ void tetra_burst_dmo_rx_cb2(const uint8_t *burst, unsigned int len, enum tetra_t
 		memcpy(dnbf_buf, b->block1, DMO_DNB_BLK_BITS);
 		memcpy(dnbf_buf + DMO_DNB_BLK_BITS, b->block2, DMO_DNB_BLK_BITS);
 		/* send one logical channel of the DNB burst via DP-SAP into lower MAC */
-		mac_dp_sap_udata_ind_filter(DPSAP_T_SCH_F, dnbf_buf, 2*DMO_DNB_BLK_BITS, priv);
+		if (tms->cur_burst.is_traffic) {
+			mac_dp_sap_udata_ind_filter(DPSAP_T_TCH, dnbf_buf, 2*DMO_DNB_BLK_BITS, priv);
+		} else {
+			mac_dp_sap_udata_ind_filter(DPSAP_T_SCH_F, dnbf_buf, 2*DMO_DNB_BLK_BITS, priv);
+		}
 		break;
 	}
 	default:
