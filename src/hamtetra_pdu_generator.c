@@ -5,7 +5,7 @@
 #include "hamtetra_pdu_generator.h"
 #include <lower_mac/tetra_lower_mac.h>
 
-int build_pdu_dpres_sync_schs(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out)
+int build_pdu_dpres_sync_schs(uint8_t fn, uint8_t tn, enum tdma_master_slave_link_flag dir, uint8_t frame_countdown, uint8_t channel_state, uint8_t *out)
 {
     uint8_t pdu_sync_SCHS[8];		/* 60 bits */
     struct bitvec bv;
@@ -26,9 +26,9 @@ int build_pdu_dpres_sync_schs(uint8_t fn, uint8_t tn, uint8_t frame_countdown, u
     bitvec_set_uint(&bv, 0, 1);	    /* Two-frequency repeater flag */
     bitvec_set_uint(&bv, 0, 2);	    /* Repeater operating modes */
     bitvec_set_uint(&bv, 0, 6);	    /* Spacing of uplink */
-    bitvec_set_uint(&bv, 0, 1);	    /* Master/slave link flag */
+    bitvec_set_uint(&bv, dir, 1);	    /* Master/slave link flag */
     bitvec_set_uint(&bv, 0, 2);	    /* Channel usage */
-    bitvec_set_uint(&bv, 0, 2);	    /* Channel state */
+    bitvec_set_uint(&bv, channel_state, 2);	    /* Channel state */
     bitvec_set_uint(&bv, tn, 2);	/* Slot number */
 	bitvec_set_uint(&bv, fn, 5);	/* Frame number */
     bitvec_set_uint(&bv, 1, 3);	    /* Power class */
@@ -85,12 +85,12 @@ int build_pdu_dpres_sync_schh(uint8_t fn, uint8_t tn, uint8_t frame_countdown, u
 }
 
 
-int build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t channel_state, uint8_t *out)
+int build_pdu_dpress_sync(uint8_t fn, uint8_t tn, enum tdma_master_slave_link_flag dir, uint8_t frame_countdown, uint8_t channel_state, uint8_t *out)
 {
 	uint8_t sb_type5[120];
 	uint8_t si_type5[216];
 
-    build_pdu_dpres_sync_schs(fn, tn, frame_countdown, sb_type5);
+    build_pdu_dpres_sync_schs(fn, tn, dir, frame_countdown, channel_state, sb_type5);
     build_pdu_dpres_sync_schh(fn, tn, frame_countdown, si_type5);
 
     int len = build_dm_sync_burst(out, sb_type5, si_type5);
@@ -98,7 +98,7 @@ int build_pdu_dpress_sync(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8
     return len;
 }
 
-int build_pdu_dpress_sync_gate(uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out)
+int build_pdu_dpress_sync_gate(uint8_t fn, uint8_t tn, enum tdma_master_slave_link_flag dir, uint8_t frame_countdown, uint8_t *out)
 {
     uint8_t pdu_sync_SCHS[8];		/* 60 bits */
     uint8_t pdu_sync_SCHH[16];	    /* 124 bits */
@@ -122,7 +122,7 @@ int build_pdu_dpress_sync_gate(uint8_t fn, uint8_t tn, uint8_t frame_countdown, 
     bitvec_set_uint(&bv, 0, 1);	    /* Two-frequency repeater flag */
     bitvec_set_uint(&bv, 0, 2);	    /* Repeater operating modes */
     bitvec_set_uint(&bv, 0, 6);	    /* Spacing of uplink */
-    bitvec_set_uint(&bv, 0, 1);	    /* Master/slave link flag */
+    bitvec_set_uint(&bv, dir, 1);	    /* Master/slave link flag */
     bitvec_set_uint(&bv, 0, 2);	    /* Channel usage */
     bitvec_set_uint(&bv, 3, 2);	    /* Channel state */
     bitvec_set_uint(&bv, tn, 2);	/* Slot number */
