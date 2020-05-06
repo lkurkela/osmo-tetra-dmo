@@ -292,7 +292,7 @@ int build_encoded_block_tch(enum dp_sap_data_type type, uint8_t *in, uint8_t *ou
 
 	/* Run scrambling (all-zero): type-5 bits */
 	memcpy(type5, type2, tbp->type345_bits);
-	tetra_scramb_bits(SCRAMB_INIT, type5, tbp->type345_bits);
+	tetra_scramb_bits(tcd->scramb_init, type5, tbp->type345_bits);
 	printf("TCH type5: %s\n", osmo_ubit_dump(type5, tbp->type345_bits));
 
 	memcpy(out, type5, tbp->type345_bits);
