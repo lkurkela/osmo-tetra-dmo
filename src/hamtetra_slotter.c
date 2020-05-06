@@ -24,7 +24,27 @@ struct slotter_state *slotter_init()
 	s->tms = calloc(1, sizeof(*s->tms));
 	tetra_mac_state_init(s->tms);
 	s->tms->infra_mode = TETRA_INFRA_DMO;
-	init_more_tetra_dmo_rep_stuff(s->tms);
+
+	struct tetra_tdma_time init_time = {
+			.hn = 1,
+			.sn = 1,
+			.tn = 1,
+			.fn = 1,
+			.mn = 1,
+			.link = DM_LINK_MASTER
+		};
+	t_phy_state.time = init_time;
+
+	// initialize fragmentation slots
+	memset((void *)&fragslots,0,sizeof(struct fragslot)*FRAGSLOT_NR_SLOTS);
+	char desc[]="slot \0";
+	for (int k=0;k<FRAGSLOT_NR_SLOTS;k++) {
+		desc[4]='0'+k;
+		fragslots[k].msgb=msgb_alloc(8192, desc);
+		msgb_reset(fragslots[k].msgb);
+	}
+
+	s->tms->channel_state=DM_CHANNEL_S_DMREP_IDLE_UNKNOWN;
 
 	return s;
 }

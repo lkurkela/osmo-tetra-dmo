@@ -159,6 +159,7 @@ int mac_request_tx_buffer_content(uint8_t *bits, struct timing_slot *slot)
 
             // send DPRES-SYNC presence signal burst periodically on IDLE channel
             if (--presence_signal_counter < (DN253*4)){
+                printf(" DPRES IDLE - ");
                 uint8_t countdown = (presence_signal_counter-1) / 4;
                 len = build_pdu_dpress_sync(slot->fn, slot->tn, DM_LINK_SLAVE, countdown, 0, bits);
                 if (presence_signal_counter == 0) {
@@ -176,6 +177,7 @@ int mac_request_tx_buffer_content(uint8_t *bits, struct timing_slot *slot)
             // Send DM-REP presence signal in DSB in slot 3 at frames 1, 7 and 13 (master-link)
             if (frame_buf_master.tn[slotnum].len < 1) {
                 if ((slot->fn == 1 || slot->fn == 7 || slot->fn==13) && slot->tn == 3) {
+                    printf(" DPRES OCC - ");
                     len = build_pdu_dpress_sync(slot->fn, slot->tn, DM_LINK_MASTER, 0, 1, bits);
                     sent_buffer_set(slot, len);
                     printf(" - burst len: %d\n", len);

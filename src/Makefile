@@ -5,7 +5,7 @@ LDLIBS += -lSoapySDR -lliquid
 
 # all: conv_enc_test crc_test tetra-rx tetra-rx-dmo float_to_bits tunctl tetra-dmo-rep
 #all: conv_enc_test crc_test float_to_bits tunctl tetra-dmo-rep hamtetra_main
-all: float_to_bits tunctl hamtetra_main hamtetra_main2
+all: float_to_bits tunctl hamtetra_main hamtetra_main2 hamtetra_monitor
 
 debug: CFLAGS := -lasan $(CFLAGS) -fsanitize=address -fno-omit-frame-pointer -g -O0
 debug: LDLIBS := -lasan $(LDLIBS)
@@ -26,15 +26,17 @@ crc_test: crc_test.o tetra_common.o libosmo-tetra-mac.a
 
 # tetra-rx: tetra-rx.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 # tetra-rx-dmo: tetra-rx-dmo.o libosmo-tetra-phy.a libosmo-tetra-mac.a
-tetra-dmo-rep: tetra-dmo-rep.o libosmo-tetra-phy.a libosmo-tetra-mac.a pdus.o
+# tetra-dmo-rep: tetra-dmo-rep.o libosmo-tetra-phy.a libosmo-tetra-mac.a pdus.o
 
-hamtetra_main: hamtetra_main.o hamtetra_timing.o hamtetra_slotter.o tetra-dmo-rep.o pdus.o libosmo-tetra-phy.a libosmo-tetra-mac.a
+hamtetra_main: hamtetra_main.o hamtetra_timing.o hamtetra_slotter.o pdus.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 
-hamtetra_main2: hamtetra_main2.o hamtetra_timing.o hamtetra_slotter.o tetra-dmo-rep.o pdus.o libosmo-tetra-phy.a libosmo-tetra-mac.a ../../suo/libsuo/build/libsuo-dsp.a ../../suo/libsuo/build/libsuo-io.a
+hamtetra_main2: hamtetra_main2.o hamtetra_timing.o hamtetra_slotter.o pdus.o libosmo-tetra-phy.a libosmo-tetra-mac.a ../../suo/libsuo/build/libsuo-dsp.a ../../suo/libsuo/build/libsuo-io.a
+
+hamtetra_monitor: hamtetra_monitor.o hamtetra_timing.o hamtetra_slotter.o pdus.o libosmo-tetra-phy.a libosmo-tetra-mac.a ../../suo/libsuo/build/libsuo-dsp.a ../../suo/libsuo/build/libsuo-io.a
 
 conv_enc_test: conv_enc_test.o testpdu.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 
 tunctl: tunctl.o
 
 clean:
-	@rm -f tunctl float_to_bits crc_test tetra-rx tetra-rx-dmo tetra-dmo-rep tetra-main conv_enc_test *.o phy/*.o lower_mac/*.o *.a
+	@rm -f tunctl float_to_bits crc_test tetra-rx tetra-main hamtetra_main hamtetra_main2 hamtetra_monitor conv_enc_test *.o phy/*.o lower_mac/*.o *.a
