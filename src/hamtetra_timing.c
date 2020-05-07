@@ -26,6 +26,7 @@ struct timing_state *timing_init()
 	s->sym_time = 1e9 / 18000.0 + 0.5;
 	s->slot_time = 1e9 * 255.0 / 18000.0 + 0.5;
 	s->use_interslot_bits = 1;
+	s->use_calibration = 1;
 
 	return s;
 }
@@ -34,6 +35,29 @@ struct timing_state *timing_init()
 int timing_rx_burst(struct timing_state *s, const uint8_t *bits, int len, uint64_t ts)
 {
 	//printf("RX %20lu %20lu\n", ts, s->tx_time);
+	/* If the timestamp is sufficiently close to one of previous own
+	 * transmitted bursts, assume it's an "echo" and don't pass it to L2.
+	 * Use it, however, to calibrate the timestamp difference between
+	 * received and transmitted bursts.
+	 *
+	 * Some extra checking might be useful for reliable operation:
+	 * if the training sequence happens to occur elsewhere in a burst,
+	 * the modem may deliver a mis-synchronized burst which will spoil
+	 * the calibration. This is not handled yet. */
+	const int64_t reject_margin = 2000000;
+	unsigned i;
+	for (i = 0; i < TIMING_TX_TIMES; i++) {
+		int64_t td = ts - s->tx_times[i];
+		if (td > -reject_margin && td < reject_margin) {
+			if (s->use_calibration)
+				s->cal_time = -td;
+			printf("Rejected echo, timediff %10ld ns\n", (long)td);
+			return 0;
+		}
+	}
+
+	// Apply calibration value before further processing the timestamp
+	ts += s->cal_time;
 
 	// Find the nearest timeslot by comparing to the transmit counters
 	int64_t td_tx = ts - s->tx_time;
@@ -116,7 +140,9 @@ int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t 
 		} else {
 			fprintf(stderr, "Warning: unexpected burst length %d\n", retlen);
 		}
-		*ts = tx_time + tslot.diff + s->sym_time * offset_syms;
+		if (retlen >= 0)
+			s->tx_times[(s->tx_n++) % TIMING_TX_TIMES] = tx_time;
+		*ts = tx_time + s->sym_time * offset_syms;
 		s->prev_dmo = is_dmo;
 
 		// Go to the next slot
