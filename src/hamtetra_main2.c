@@ -7,6 +7,7 @@
 #include "hamtetra_slotter.h"
 #include "hamtetra_mac.h"
 #include "signal-io/soapysdr_io.h"
+#include "signal-io/alsa_io.h"
 #include "modem/burst_dpsk_receiver.h"
 #include "modem/psk_transmitter.h"
 #include <assert.h>
@@ -89,6 +90,23 @@ static int hamtetra_init(const char *hw, double tetra_freq, int mode)
 		return -1; // not implemented
 		//io_code = &file_io_code;
 		// TODO: file I/O
+	} else if (strncmp(hw, "alsa:", 5) == 0) {
+		samplerate = 48000;
+		offset_freq = 12000;
+
+		io_code = &alsa_io_code;
+		struct alsa_io_conf *io_conf = alsa_io_code.init_conf();
+
+		io_conf->samplerate = samplerate;
+		io_conf->rx_name =
+		io_conf->tx_name = strdup(hw + 5);
+		io_conf->tx_latency = 480;
+
+		if (mode == 0) // monitor only (doesn't work yet)
+			io_conf->tx_on = 0;
+
+		io_arg = alsa_io_code.init(io_conf);
+		free(io_conf);
 	} else {
 		io_code = &soapysdr_io_code;
 		struct soapysdr_io_conf *io_conf = soapysdr_io_code.init_conf();
@@ -161,6 +179,7 @@ static int hamtetra_init(const char *hw, double tetra_freq, int mode)
 		}
 
 		io_arg = soapysdr_io_code.init(io_conf);
+		free(io_conf);
 	}
 	if (io_arg == NULL)
 		return -1;
@@ -202,7 +221,9 @@ int main(int argc, char *argv[])
 			"   limenet   LimeNET Micro\n"
 			"   usrp      USRP B200\n"
 			"   rtlsdr    RTL-SDR (receive only)\n"
-			"   audio-in  Audio centered at 12 kHz (receive only)\n"
+			"   audio-in  Audio centered at 12 kHz (receive only, through SoapyAudio)\n"
+			"   alsa:NAME Audio centered at 12 kHz (full duplex through ALSA)\n"
+			"             NAME is soundcard name, e.g. hw:0,0\n"
 			"MODE options are:\n"
 			"   0         DMO monitor\n"
 			"   1         DMO repeater (default)\n"

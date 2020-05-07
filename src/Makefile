@@ -1,7 +1,7 @@
 CFLAGS=-g -Wall `pkg-config --cflags libosmocore 2> /dev/null` -I. -I../../suo/libsuo
-LDLIBS=`pkg-config --libs libosmocore 2> /dev/null` -losmocore -lzmq -lm -lpthread
+LDLIBS=`pkg-config --libs libosmocore 2> /dev/null` -losmocore -lzmq -lm
 # These are only needed for hamtetra_main2:
-LDLIBS += -lSoapySDR -lliquid
+LDLIBS += -lSoapySDR -lliquid -lasound
 
 # all: conv_enc_test crc_test tetra-rx tetra-rx-dmo float_to_bits tunctl tetra-dmo-rep
 #all: conv_enc_test crc_test float_to_bits tunctl tetra-dmo-rep hamtetra_main
