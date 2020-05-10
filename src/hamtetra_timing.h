@@ -3,7 +3,10 @@
 
 #include <stdint.h>
 
+// Total slots in one hyperframe
 #define TIMING_SLOTS 4320
+// Number of previous transmit timestamps to store for "echo" rejection
+#define TIMING_TX_TIMES 4
 
 struct slotter_state;
 
@@ -14,6 +17,8 @@ struct timing_state {
 	uint64_t slot_time;
 	// Length of a symbol
 	int64_t sym_time;
+	// Calibration added to received timestamps
+	int64_t cal_time;
 
 	// Next transmission slot
 	uint64_t tx_time;
@@ -22,13 +27,19 @@ struct timing_state {
 	unsigned char prev_dmo; // Flag: a DMO burst was transmitted in the previous slot
 
 	unsigned char use_interslot_bits; // Configuration flag
+	unsigned char use_calibration;    // Configuration flag
+
+	/* A few previous transmit timestamps, used to reject
+	 * own transmissions being received */
+	unsigned char tx_n;
+	uint64_t tx_times[TIMING_TX_TIMES];
 };
 
 struct timing_slot {
 	uint64_t time;    // Timestamp
 
 	/* For RX: Time difference from expected timestamp
-	 * For TX: Used to return a time offset from start of slot */
+	 * For TX: Not used for now */
 	int64_t  diff;
 
 	unsigned char tn; // Timeslot Number (1 to 4)
