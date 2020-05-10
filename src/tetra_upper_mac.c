@@ -714,6 +714,25 @@ int rx_dm_dmacsync_sch_h(uint8_t *bits, struct tetra_dmo_pdu_dmac_sync *sync) {
 
 	switch(pdu_dmac_sync->message_type) {
 		case DM_SETUP: 
+		case DM_SETUP_PRES:
+			memcpy(pdu_dmac_sync->message_fields, bits+pointer, 21);
+			pdu_dmac_sync->message_fields_len = 21;
+			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer+21, 5);
+			pdu_dmac_sync->dm_sdu_len = 5;
+			break;
+		case DM_CONNECT:
+			memcpy(pdu_dmac_sync->message_fields, bits+pointer, 8);
+			pdu_dmac_sync->message_fields_len = 8;
+			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer+8, 4);
+			pdu_dmac_sync->dm_sdu_len = 4;
+			break;
+		case DM_DISCONNECT:
+			memcpy(pdu_dmac_sync->message_fields, bits+pointer, 0);
+			pdu_dmac_sync->message_fields_len = 0;
+			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer+0, 4);
+			pdu_dmac_sync->dm_sdu_len = 4;
+			break;
+		case DM_CONNECT_ACK:
 			memcpy(pdu_dmac_sync->message_fields, bits+pointer, 21);
 			pdu_dmac_sync->message_fields_len = 21;
 			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer+21, 5);
@@ -791,7 +810,7 @@ int rx_dm_dpressync_sch_h(uint8_t *bits, struct tetra_dmo_pdu_dpres_sync *sync) 
 
 }
 
-void send_dmac_sync_burst(struct tetra_dmo_pdu_dmac_sync *dmac_sync, uint8_t fn, uint8_t tn, uint8_t frame_countdown, struct tetra_mac_state *tms) 
+void send_dmac_sync_burst(struct tetra_dmo_pdu_dmac_sync *dmac_sync, enum tdma_master_slave_link_flag link_flag, uint8_t fn, uint8_t tn, uint8_t frame_countdown, struct tetra_mac_state *tms) 
 {
 	struct tetra_dmvsap_prim *tdp;
 	struct dmv_unitdata_param *d_unitdata_param;
@@ -805,10 +824,10 @@ void send_dmac_sync_burst(struct tetra_dmo_pdu_dmac_sync *dmac_sync, uint8_t fn,
 	struct tetra_tdma_time *time = &d_unitdata_param->tdma_time;
 	time->fn = fn;
 	time->tn = tn;
-	time->link = DM_LINK_SLAVE;
+	time->link = link_flag;
 
 	uint8_t sb_type2[80];
-	int len = build_pdu_dmac_sync_schs(dmac_sync, fn, tn, 0, sb_type2);
+	int len = build_pdu_dmac_sync_schs(dmac_sync, link_flag, fn, tn, 0, sb_type2);
 
 	printf("DMV-SAP SCH/S %s - ", osmo_ubit_dump(sb_type2, 60));
 	d_unitdata_param->lchan = TETRA_LC_SCH_S;
@@ -825,10 +844,10 @@ void send_dmac_sync_burst(struct tetra_dmo_pdu_dmac_sync *dmac_sync, uint8_t fn,
 	time = &d_unitdata_param->tdma_time;
 	time->fn = fn;
 	time->tn = tn;
-	time->link = DM_LINK_SLAVE;
+	time->link = link_flag;
 
 	uint8_t si_type2[140];
-	len = build_pdu_dmac_sync_schh(dmac_sync, fn, tn, 0, si_type2);
+	len = build_pdu_dmac_sync_schh(dmac_sync, fn, tn, frame_countdown, si_type2);
 
 	printf(" SCH/H - %s\n", osmo_ubit_dump(si_type2, 124));
 	d_unitdata_param->lchan = TETRA_LC_SCH_H;
@@ -883,6 +902,9 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 		pdu_dmac_sync->sync_pdu_type = sync_pdu_type;
 
 		// should not we clear previous pdu_dmac_sync first?
+		memset(pdu_dmac_sync->message_fields, 0, sizeof(pdu_dmac_sync->message_fields));
+		memset(pdu_dmac_sync->dm_sdu, 0, sizeof(pdu_dmac_sync->dm_sdu));
+
 		if (sync_pdu_type == 0) { //DMAC-SYNC PDU
 			rx_dm_dmacsync_sch_s(bits, pdu_dmac_sync);
 		} else {
@@ -914,7 +936,7 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 			 "SCH/H - REP addr: %d, DM-REP MNI: %d, Validity unit: %d, validity units: %d, DM-MS max power-class: %d, URT: %d \n", 
 				pdu_dpres_sync->sync_pdu_type, pdu_dpres_sync->communication_type, pdu_dpres_sync->m_dmo_flag, pdu_dpres_sync->twofreq_repeater_flag, 
 				pdu_dpres_sync->repeater_operating_modes, pdu_dpres_sync->spacing_of_uplink, pdu_dpres_sync->masterslave_link_flag, pdu_dpres_sync->channel_usage,
-				pdu_dpres_sync->channel_state, pdu_dpres_sync->slot_number, pdu_dpres_sync->frame_number, pdu_dpres_sync->power_control_flag, pdu_dpres_sync->power_control_flag,
+				pdu_dpres_sync->channel_state, pdu_dpres_sync->slot_number, pdu_dpres_sync->frame_number, pdu_dpres_sync->power_class, pdu_dpres_sync->power_control_flag,
 				pdu_dpres_sync->frame_countdown, pdu_dpres_sync->priority_level, pdu_dpres_sync->dn232_dn233, pdu_dpres_sync->dt254, pdu_dpres_sync->dualwatch_sync_flag,
 				pdu_dpres_sync->repgw_address, pdu_dpres_sync->mni, pdu_dpres_sync->validity_time_unit, pdu_dpres_sync->number_of_validity_time_units, 
 				pdu_dpres_sync->max_dmms_power_class, pdu_dpres_sync->usage_restriction_type);
@@ -923,45 +945,67 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 
 		uint16_t my_repaddr = (REP_ADDRESS & 0x3ff);
 
-		// ready to repeat DM-MASTER DM-SETUP request
-		if (pdu_dmac_sync->repgw_address==my_repaddr && pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->communication_type == 1 && pdu_dmac_sync->fragmentation_flag == 0 && pdu_dmac_sync->message_type == 8 && pdu_dmac_sync->processed==false) {
+		// ready to repeat DM-MASTER DM-SETUP / DM-SETUP PRES request
+		if (pdu_dmac_sync->repgw_address==my_repaddr && pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->communication_type == 1  && pdu_dmac_sync->frame_countdown > 0 && (pdu_dmac_sync->message_type == DM_SETUP || pdu_dmac_sync->message_type == DM_SETUP_PRES) && pdu_dmac_sync->processed==false) {
 			uint8_t master_fcountdown = pdu_dmac_sync->frame_countdown;
 			uint8_t out_fn = (pdu_dmac_sync->frame_number+master_fcountdown+1) % 18;  // motoway fcn+1, spec fcn
 			uint8_t out_tn = 1;
 			tms->cur_burst.is_traffic = 1;
+			tms->mode_of_operation = DM_MAC_MODE_TRAFFIC_SPEECH;
 
 			pdu_dmac_sync->processed = true;
 			printf("## we are gonna repeat - out starting at slave link FN: %d\n", out_fn);
 
 			for (int fn=0; fn<(DN232+1); fn++) { 
 				for (int tn=1; tn<5; tn++) {
-					send_dmac_sync_burst(pdu_dmac_sync, out_fn+fn, tn, (DN232+1-fn), tms);
+					send_dmac_sync_burst(pdu_dmac_sync, DM_LINK_SLAVE, out_fn+fn, tn, (DN232-fn), tms);
 					tms->channel_state = DM_CHANNEL_S_DMREP_ACTIVE_OCCUPIED;
 				}
 			}
 
-
-
-		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->frame_countdown == 0 && pdu_dmac_sync->slot_number == 3 && pdu_dmac_sync->message_type == 8 && pdu_dmac_sync->processed==true) {
+		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->frame_countdown == 0 && (pdu_dmac_sync->message_type == DM_SETUP  || pdu_dmac_sync->message_type == DM_SETUP_PRES) && pdu_dmac_sync->processed==true) {
 			pdu_dmac_sync->processed = false;
 			printf("DM-SETUP processed flag cleared!\n");
 
-		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == 8 && pdu_dmac_sync->processed==true) {
+		} else if (pdu_dmac_sync->sync_pdu_type == 0 && (pdu_dmac_sync->message_type == DM_SETUP || pdu_dmac_sync->message_type == DM_SETUP_PRES) && pdu_dmac_sync->processed==true) {
+			printf("ignoring the repetitive DMAC-SYNC from DM-MASTER\n");
+
+		// repeat DM-SLAVE DM-CONNECT request
+		} else if (pdu_dmac_sync->repgw_address==my_repaddr && pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->communication_type == 1 && pdu_dmac_sync->frame_countdown > 0 && pdu_dmac_sync->message_type == DM_CONNECT && pdu_dmac_sync->processed == false) {
+			uint8_t master_fcountdown = pdu_dmac_sync->frame_countdown;
+			uint8_t out_fn = (pdu_dmac_sync->frame_number+master_fcountdown+1) % 18;  // motoway fcn+1, spec fcn
+			uint8_t out_tn = 3;
+
+			pdu_dmac_sync->processed = true;
+			printf("## we are gonna repeat - out starting at master link FN: %d\n", out_fn);
+			for (int fn=0; fn<=master_fcountdown; fn++) { 
+				send_dmac_sync_burst(pdu_dmac_sync, DM_LINK_MASTER, out_fn+fn, 1, (master_fcountdown-fn), tms);
+				if ((master_fcountdown-fn) > 0) {
+					send_dmac_sync_burst(pdu_dmac_sync, DM_LINK_MASTER, out_fn+fn, 3, (master_fcountdown-fn), tms);
+				}
+			}
+
+		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->frame_countdown == 0 && (pdu_dmac_sync->message_type == DM_CONNECT) && pdu_dmac_sync->processed==true) {
+			pdu_dmac_sync->processed = false;
+			printf("DM-CONNECT processed flag cleared!\n");
+
+		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == DM_CONNECT && pdu_dmac_sync->processed==true) {
 			printf("ignoring the repetitive DMAC-SYNC from DM-MASTER\n");
 
 		// DMAC-SYNC DM-OCCUPIED
 		} else if (tms->channel_state == DM_CHANNEL_S_DMREP_ACTIVE_OCCUPIED && pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == DM_OCCUPIED)  {
 			// repeat DMAC-SYNC burst
 			tms->channel_state_last_chg = 0; // reset counter for keepalive
-			send_dmac_sync_burst(pdu_dmac_sync, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, tms);
+			send_dmac_sync_burst(pdu_dmac_sync, DM_LINK_SLAVE, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, tms);
 
 
 		// DMAC-SYNC DM-RELEASE - change channel state to free
 		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == DM_RELEASE) {
 			tms->cur_burst.is_traffic = 0;
+			tms->mode_of_operation = DM_MAC_MODE_SYNC_SIGNALLING;
 			tms->channel_state = DM_CHANNEL_S_DMREP_IDLE_FREE;
 			tms->channel_state_last_chg = 0;
-			send_dmac_sync_burst(pdu_dmac_sync, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, tms);
+			send_dmac_sync_burst(pdu_dmac_sync, DM_LINK_SLAVE, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, tms);
 
 			// rx_dmv_unitdata_req(NULL, tms);
 
@@ -969,7 +1013,7 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == DM_RESERVED) {
 			tms->channel_state = DM_CHANNEL_S_DMREP_ACTIVE_RESERVED;
 			tms->channel_state_last_chg = 0;
-			send_dmac_sync_burst(pdu_dmac_sync, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, tms);
+			send_dmac_sync_burst(pdu_dmac_sync, DM_LINK_SLAVE, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, tms);
 
 			// rx_dmv_unitdata_req(NULL, tms);
 

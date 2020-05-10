@@ -10,6 +10,7 @@ int build_pdu_dpres_sync_schs(uint8_t fn, uint8_t tn, enum tdma_master_slave_lin
     uint8_t pdu_sync_SCHS[8];		/* 60 bits */
     struct bitvec bv;
 
+    memset(&pdu_sync_SCHS, 0, sizeof(pdu_sync_SCHS));
 	memset(&bv, 0, sizeof(bv));
 	bv.data = pdu_sync_SCHS;
 	bv.data_len = sizeof(pdu_sync_SCHS);
@@ -58,6 +59,7 @@ int build_pdu_dpres_sync_schh(uint8_t fn, uint8_t tn, uint8_t frame_countdown, u
     uint8_t pdu_sync_SCHH[16];	    /* 124 bits */
     struct bitvec bv;
 
+    memset(&pdu_sync_SCHH, 0, sizeof(pdu_sync_SCHH));
 	memset(&bv, 0, sizeof(bv));
 	bv.data = pdu_sync_SCHH;
 	bv.data_len = sizeof(pdu_sync_SCHH);
@@ -105,6 +107,8 @@ int build_pdu_dpress_sync_gate(uint8_t fn, uint8_t tn, enum tdma_master_slave_li
 
     struct bitvec bv;
 
+    memset(&pdu_sync_SCHS, 0, sizeof(pdu_sync_SCHS));
+    memset(&pdu_sync_SCHH, 0, sizeof(pdu_sync_SCHH));
 	memset(&bv, 0, sizeof(bv));
 	bv.data = pdu_sync_SCHS;
 	bv.data_len = sizeof(pdu_sync_SCHS);
@@ -180,12 +184,14 @@ int build_pdu_dpress_sync_gate(uint8_t fn, uint8_t tn, enum tdma_master_slave_li
     return len;
 }
 
-int build_pdu_dmac_sync_schs(struct tetra_dmo_pdu_dmac_sync *dmac_sync, uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out)
+int build_pdu_dmac_sync_schs(struct tetra_dmo_pdu_dmac_sync *dmac_sync, enum tdma_master_slave_link_flag link_flag, uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out)
 {
     uint8_t pdu_sync_SCHS[8];		/* 60 bits */
     uint8_t sb_type2[80];
 
     struct bitvec bv;
+
+    memset(&pdu_sync_SCHS, 0, sizeof(pdu_sync_SCHS));
     memset(&bv, 0, sizeof(bv));
     bv.data = pdu_sync_SCHS;
     bv.data_len = sizeof(pdu_sync_SCHS);
@@ -193,10 +199,10 @@ int build_pdu_dmac_sync_schs(struct tetra_dmo_pdu_dmac_sync *dmac_sync, uint8_t 
     bitvec_set_uint(&bv, dmac_sync->system_code, 4);	/* System Code  */
     bitvec_set_uint(&bv, 0, 2);	    /* Sync PDU type */
     bitvec_set_uint(&bv, 1, 2);	    /* Communication Type */
-    bitvec_set_uint(&bv, 0, 1);	    /* Master/slave link flag */
+    bitvec_set_uint(&bv, link_flag, 1);	    /* Master/slave link flag */
     bitvec_set_uint(&bv, 0, 1);	    /* Gateway generated message flag */
     bitvec_set_uint(&bv, 0, 2);	    /* A/B channel usage */
-    bitvec_set_uint(&bv, tn, 2);	/* Slot number */
+    bitvec_set_uint(&bv, tn-1, 2);	/* Slot number */
     bitvec_set_uint(&bv, fn, 5);	/* Frame number */
     bitvec_set_uint(&bv, dmac_sync->airint_encryption_state, 2);   /* Air interface encryption state */
     bitvec_set_uint(&bv, 0, 39);	    /* Reserved, encryption not yet supported */
@@ -214,6 +220,7 @@ int build_pdu_dmac_sync_schh(struct tetra_dmo_pdu_dmac_sync *dmac_sync, uint8_t 
     uint8_t si_type2[140];
 
     struct bitvec bv;
+    memset(&pdu_sync_SCHH, 0, sizeof(pdu_sync_SCHH));
     memset(&bv, 0, sizeof(bv));
     bv.data = pdu_sync_SCHH;
     bv.data_len = sizeof(pdu_sync_SCHH);
@@ -221,7 +228,7 @@ int build_pdu_dmac_sync_schh(struct tetra_dmo_pdu_dmac_sync *dmac_sync, uint8_t 
     bitvec_set_uint(&bv, dmac_sync->repgw_address, 10);	/* Repeater address */
     bitvec_set_uint(&bv, dmac_sync->fillbit_indication, 1);	    /* Fillbit indication */
     bitvec_set_uint(&bv, dmac_sync->fragmentation_flag, 1);	    /* Fragment flag */
-    bitvec_set_uint(&bv, 1-fn, 2);	    /* frame countdown */
+    bitvec_set_uint(&bv, frame_countdown, 2);	    /* frame countdown */
     bitvec_set_uint(&bv, dmac_sync->dest_address_type, 2);	    /* destination address type */
     bitvec_set_uint(&bv, dmac_sync->dest_address, 24);	    /* destination address */
     bitvec_set_uint(&bv, dmac_sync->src_address_type, 2);	    /* source address type */
@@ -240,6 +247,11 @@ int build_pdu_dmac_sync_schh(struct tetra_dmo_pdu_dmac_sync *dmac_sync, uint8_t 
     }
     if (dmac_sync->fillbit_indication==1) {
         bitvec_set_uint(&bv, 1, 1);
+    }
+
+    // fill the rest with zeroes
+    for(int i=bv.cur_bit; i<124; i++) {
+        bitvec_set_uint(&bv, 0, 1);
     }
 
     osmo_pbit2ubit(out, pdu_sync_SCHH, 124);

@@ -59,6 +59,15 @@ enum dm_channel_state {
 	DM_CHANNEL_S_DMREP_ACTIVE_RESERVED,
 };
 
+
+/* DM MAC Mode of operation selector 300 396-3 8.2.6.3 */
+enum dm_mac_mode_of_operation {
+	DM_MAC_MODE_SYNC_SIGNALLING,
+	DM_MAC_MODE_SIGNALLING,
+	DM_MAC_MODE_TRAFFIC_SPEECH,
+	DM_MAC_MODE_TRAFFIC_DATA
+};
+
 uint32_t bits_to_uint(const uint8_t *bits, unsigned int len);
 
 #define FRAGSLOT_MSGB_SIZE 8192
@@ -93,6 +102,7 @@ struct tetra_mac_state {
 	int tsn;	/* Timeslot number */
 	enum tetra_infrastructure_mode infra_mode;
 	enum dm_channel_state channel_state;
+	enum dm_mac_mode_of_operation mode_of_operation;
 	uint64_t channel_state_last_chg;
 	struct timing_slot *slot;
 };

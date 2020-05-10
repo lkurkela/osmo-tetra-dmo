@@ -89,7 +89,7 @@ void dp_sap_udata_req(enum dp_sap_data_type type, const uint8_t *bits, unsigned 
     if (tdma_time.link == DM_LINK_SLAVE) {
         slotnum = (slotnum+3) % 72;
     }
-    printf("BURST OUT - scheduled to slave link buffer slot %d/%d (%d)\n", tdma_time.fn, tdma_time.tn, slotnum);
+    printf("BURST OUT - scheduled to %d link buffer slot %d/%d (%d)\n", tdma_time.link, tdma_time.fn, tdma_time.tn, slotnum);
     struct timeslot *burst_slot;
     burst_slot = &frame_buf_master.tn[slotnum];
     memcpy(burst_slot->burst, bits, len);
@@ -195,6 +195,7 @@ int mac_request_tx_buffer_content(uint8_t *bits, struct timing_slot *slot)
                 tms->channel_state = DM_CHANNEL_S_DMREP_IDLE_FREE;
                 tms->channel_state_last_chg = 0;
        			tms->cur_burst.is_traffic = 0;
+                tms->mode_of_operation = DM_MAC_MODE_SYNC_SIGNALLING;
 
             }
             break;

@@ -31,7 +31,7 @@
 int build_pdu_dpress_sync(uint8_t fn, uint8_t tn, enum tdma_master_slave_link_flag dir, uint8_t frame_countdown, uint8_t channel_state, uint8_t *out);
 int build_pdu_dpress_sync_gate(uint8_t fn, uint8_t tn, enum tdma_master_slave_link_flag dir, uint8_t frame_countdown, uint8_t *out);
 
-int build_pdu_dmac_sync_schs(struct tetra_dmo_pdu_dmac_sync *dmac_sync, uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out);
+int build_pdu_dmac_sync_schs(struct tetra_dmo_pdu_dmac_sync *dmac_sync, enum tdma_master_slave_link_flag link_flag, uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out);
 int build_pdu_dmac_sync_schh(struct tetra_dmo_pdu_dmac_sync *dmac_sync, uint8_t fn, uint8_t tn, uint8_t frame_countdown, uint8_t *out);
 
 #endif

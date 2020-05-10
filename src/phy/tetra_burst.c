@@ -560,7 +560,7 @@ void tetra_burst_dmo_rx_cb2(const uint8_t *burst, unsigned int len, enum tetra_t
 		memcpy(dnbf_buf, b->block1, DMO_DNB_BLK_BITS);
 		memcpy(dnbf_buf + DMO_DNB_BLK_BITS, b->block2, DMO_DNB_BLK_BITS);
 		/* send one logical channel of the DNB burst via DP-SAP into lower MAC */
-		if (tms->cur_burst.is_traffic) {
+		if (tms->mode_of_operation == DM_MAC_MODE_TRAFFIC_SPEECH) {
 			mac_dp_sap_udata_ind_filter(DPSAP_T_TCH, dnbf_buf, 2*DMO_DNB_BLK_BITS, priv);
 		} else {
 			mac_dp_sap_udata_ind_filter(DPSAP_T_SCH_F, dnbf_buf, 2*DMO_DNB_BLK_BITS, priv);
