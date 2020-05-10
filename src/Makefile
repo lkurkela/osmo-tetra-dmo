@@ -1,11 +1,11 @@
 CFLAGS=-g -Wall `pkg-config --cflags libosmocore 2> /dev/null` -I. -I../../suo/libsuo
-LDLIBS=`pkg-config --libs libosmocore 2> /dev/null` -losmocore -lzmq -lm -lpthread
+LDLIBS=`pkg-config --libs libosmocore 2> /dev/null` -losmocore -lzmq -lm
 # These are only needed for hamtetra_main2:
-LDLIBS += -lSoapySDR -lliquid
+LDLIBS += -lSoapySDR -lliquid -lasound
 
 # all: conv_enc_test crc_test tetra-rx tetra-rx-dmo float_to_bits tunctl tetra-dmo-rep
 #all: conv_enc_test crc_test float_to_bits tunctl tetra-dmo-rep hamtetra_main
-all: float_to_bits tunctl hamtetra_main hamtetra_main2 hamtetra_monitor
+all: float_to_bits tunctl hamtetra_main hamtetra_main2
 
 debug: CFLAGS := -lasan $(CFLAGS) -fsanitize=address -fno-omit-frame-pointer -g -O0
 debug: LDLIBS := -lasan $(LDLIBS)
@@ -31,8 +31,6 @@ crc_test: crc_test.o tetra_common.o libosmo-tetra-mac.a
 hamtetra_main: hamtetra_main.o hamtetra_timing.o hamtetra_slotter.o pdus.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 
 hamtetra_main2: hamtetra_main2.o hamtetra_timing.o hamtetra_slotter.o pdus.o libosmo-tetra-phy.a libosmo-tetra-mac.a ../../suo/libsuo/build/libsuo-dsp.a ../../suo/libsuo/build/libsuo-io.a
-
-hamtetra_monitor: hamtetra_monitor.o hamtetra_timing.o hamtetra_slotter.o pdus.o libosmo-tetra-phy.a libosmo-tetra-mac.a ../../suo/libsuo/build/libsuo-dsp.a ../../suo/libsuo/build/libsuo-io.a
 
 conv_enc_test: conv_enc_test.o testpdu.o libosmo-tetra-phy.a libosmo-tetra-mac.a
 
