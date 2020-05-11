@@ -17,6 +17,15 @@
 /* DMO EN 300 396-2 - 9.4.3.3.2 Inter-slot frequency correction bits */
 static const uint8_t g_bits[40] = { 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0};
 
+/* Extra symbols added before transmission.
+ * A future version of modem could send bits at half amplitude when bit 4 is set
+ * and reset its phase when bit 5 is set. */
+#define RAMPUP_SYMS 3
+static const uint8_t rampup_bits[RAMPUP_SYMS * 2] = { 0x30,0x31, 0,1, 1,1 };
+// Extra symbols added after transmission
+#define RAMPDN_SYMS 1
+static const uint8_t rampdn_bits[RAMPDN_SYMS * 2] = { 0x10,0x10 };
+
 
 struct timing_state *timing_init()
 {
@@ -113,10 +122,17 @@ int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t 
 		};
 
 		retlen = slotter_tx_burst(s->slotter, bits, maxlen, &tslot);
-		int offset_syms = 0;
+		int offset_syms = 0; // Burst offset from beginning of a slot
 		unsigned char is_dmo = 0;
 		if (retlen < 0) {
-			// No transmission
+			/* No transmission.
+			 * If DMO burst was previously transmitted, add ramp-down symbols
+			 * right after the previous burst. */
+			if (s->prev_dmo) {
+				offset_syms = -3;
+				memcpy(bits, rampdn_bits, RAMPDN_SYMS * 2);
+				retlen = RAMPDN_SYMS * 2;
+			}
 		} else if (retlen == 470) {
 			// DMO burst
 			is_dmo = 1;
@@ -130,8 +146,12 @@ int timing_tx_burst(struct timing_state *s, uint8_t *bits, int maxlen, uint64_t 
 				memcpy(bits, g_bits, 40);
 				retlen += 40;
 			} else {
-				/* DMO burst starts 34 bits (17 symbols) after slot boundary. */
-				offset_syms = 17;
+				/* DMO burst starts 34 bits (17 symbols) after slot boundary.
+				 * Add extra ramp-up symbols before it. */
+				offset_syms = 17 - RAMPUP_SYMS;
+				memmove(bits + RAMPUP_SYMS * 2, bits, retlen);
+				memcpy(bits, rampup_bits, RAMPUP_SYMS * 2);
+				retlen += RAMPUP_SYMS * 2;
 			}
 		} else if (retlen == 510) {
 			/* Burst that fills the whole slot.
