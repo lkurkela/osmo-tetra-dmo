@@ -8,6 +8,7 @@
 #include "hamtetra_pdu_generator.h"
 #include "hamtetra_mac.h"
 #include "hamtetra_slotter.h"
+#include "hamtetra_config.h"
 #include "phy/tetra_burst.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -15,6 +16,7 @@
 #include <assert.h>
 
 extern struct tetra_phy_state t_phy_state;
+FILE *debuglog;
 
 struct slotter_state *slotter_init()
 {
@@ -45,6 +47,10 @@ struct slotter_state *slotter_init()
 	}
 
 	s->tms->channel_state=DM_CHANNEL_S_DMREP_IDLE_UNKNOWN;
+
+	#ifdef DEBUG_BURSTLOG
+	debuglog = fopen(DEBUG_BURSTLOG, "ab");
+	#endif
 
 	return s;
 }
@@ -93,6 +99,10 @@ int slotter_rx_burst(struct slotter_state *s, const uint8_t *bits, int len, stru
 
 	}
 
+	#ifdef DEBUG_BURSTLOG
+	fprintf(debuglog,"RX;%u;%02u;%u;%ld;%s\n", slot->mn, slot->fn, slot->tn, slot->diff, osmo_ubit_dump(bits,len));
+	#endif
+
 	s->prev_burst_time = slot->time;
 	return 0;
 }
@@ -107,6 +117,12 @@ int slotter_tx_burst(struct slotter_state *s, uint8_t *bits, int maxlen, struct 
 
 	// trying to glue it to tetra-dmo-rep here
 	len = mac_request_tx_buffer_content(bits, slot);
+
+	#ifdef DEBUG_BURSTLOG
+	if (len>-1) {
+		fprintf(debuglog,"TX;%u;%02u;%u;%ld;%s\n", slot->mn, slot->fn, slot->tn, slot->diff, osmo_ubit_dump(bits,len));
+	}
+	#endif
 
 	assert(len <= maxlen);
 	return len;
