@@ -228,6 +228,9 @@ int build_pdu_dmac_sync_schh(struct tetra_dmo_pdu_dmac_sync *dmac_sync, uint8_t 
     bitvec_set_uint(&bv, dmac_sync->repgw_address, 10);	/* Repeater address */
     bitvec_set_uint(&bv, dmac_sync->fillbit_indication, 1);	    /* Fillbit indication */
     bitvec_set_uint(&bv, dmac_sync->fragmentation_flag, 1);	    /* Fragment flag */
+    if (dmac_sync->fragmentation_flag == 1) {
+        bitvec_set_uint(&bv, dmac_sync->number_of_sch_f_slots, 4);	    /* Number of SCH/F slots */
+    }
     bitvec_set_uint(&bv, frame_countdown, 2);	    /* frame countdown */
     bitvec_set_uint(&bv, dmac_sync->dest_address_type, 2);	    /* destination address type */
     bitvec_set_uint(&bv, dmac_sync->dest_address, 24);	    /* destination address */

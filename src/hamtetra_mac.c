@@ -185,6 +185,16 @@ int mac_request_tx_buffer_content(uint8_t *bits, struct timing_slot *slot)
                 }
 
             }
+
+            // Channel in occupied state over 5 multiframes without any bursts? Most probably an error so reset state back to IDLE
+            if (tms->channel_state_last_chg>360) {
+                tms->channel_state = DM_CHANNEL_S_DMREP_IDLE_FREE;
+                tms->channel_state_last_chg = 0;
+       			tms->cur_burst.is_traffic = 0;
+                tms->mode_of_operation = DM_MAC_MODE_SYNC_SIGNALLING;
+
+            }
+
             break;
 
         case DM_CHANNEL_S_DMREP_ACTIVE_RESERVED:

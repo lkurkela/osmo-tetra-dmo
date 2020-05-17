@@ -255,9 +255,15 @@ int build_encoded_block_sch(enum dp_sap_data_type type, uint8_t *in, uint8_t *ou
 	block_interleave(tbp->type345_bits, tbp->interleave_a, type3, type4);
 	// printf("SYNC type4: %s\n", osmo_ubit_dump(type4, tbp->type345_bits));
 
-	/* Run scrambling (all-zero): type-5 bits */
 	memcpy(type5, type4, tbp->type345_bits);
-	tetra_scramb_bits(SCRAMB_INIT, type5, tbp->type345_bits);
+	if (type == DPSAP_T_SCH_F) {
+		/* Run scrambling: type-5 bits */
+		tetra_scramb_bits(tcd->scramb_init, type5, tbp->type345_bits);
+	} else { 
+		/* Run scrambling (all-zero): type-5 bits */
+		tetra_scramb_bits(SCRAMB_INIT, type5, tbp->type345_bits);
+	}
+	
 	printf("SYNC type5: %s\n", osmo_ubit_dump(type5, tbp->type345_bits));
 
 	memcpy(out, type5, tbp->type345_bits);
@@ -768,6 +774,19 @@ int rx_dmv_unitdata_req(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_state *
 		int len = build_dm_sync_burst(burst, sch_burst->block1, sch_burst->block2); 
 		printf("SYNC burst: %s\n", osmo_ubit_dump(burst, len));
 		dp_sap_udata_req(DPSAP_T_SCH_H, burst, len, tup->tdma_time, tms);				
+
+	} else if (tup->lchan == TETRA_LC_SCH_F) {
+		uint8_t block12[432];
+		uint8_t block1[216];
+		uint8_t block2[216];
+
+		build_encoded_block_sch(DPSAP_T_SCH_F, msg->l1h, block12);
+		memcpy(block1, block12, 216);
+		memcpy(block2, block12+216, 216);
+
+		int len = build_dm_norm_burst(burst, block1, block2, 1);
+		printf("SCH/F burst - type5: %s\n", osmo_ubit_dump(burst, len));
+		dp_sap_udata_req(DPSAP_T_SCH_F, burst, len, tup->tdma_time, tms);
 
 	} else if (tup->lchan == TETRA_LC_TCH) {
 		uint8_t block12[432];

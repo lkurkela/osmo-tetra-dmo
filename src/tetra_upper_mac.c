@@ -756,6 +756,12 @@ int rx_dm_dmacsync_sch_h(uint8_t *bits, struct tetra_dmo_pdu_dmac_sync *sync) {
 			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer+32, 4);
 			pdu_dmac_sync->dm_sdu_len = 4;
 		break;
+		case DM_SDS_DATA:
+		case DM_SDS_UDATA:
+			memcpy(pdu_dmac_sync->message_fields, bits+pointer, 8);
+			pdu_dmac_sync->message_fields_len = 8;
+			memcpy(pdu_dmac_sync->dm_sdu, bits+pointer+8, (124-pointer-8));
+			pdu_dmac_sync->dm_sdu_len = (124-pointer-8);
 
 	}
 
@@ -922,10 +928,10 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 			printf("DMAC-SYNC PDU (%d): SCH/S - Comm %d, M/S %d, GW msg %d, AB %d, TN %d, FN %d, ENC %d \n", 
 					pdu_dmac_sync->sync_pdu_type, pdu_dmac_sync->communication_type, pdu_dmac_sync->masterslave_link_flag, pdu_dmac_sync->gateway_message_flag, 
 					pdu_dmac_sync->ab_channel_usage, pdu_dmac_sync->slot_number, pdu_dmac_sync->frame_number, pdu_dmac_sync->airint_encryption_state);
-			printf("  REPGW %d, Fill %d, Frag %d, num %d, FN cnt %d, dst-type %d, dst-addr %d, src-type %d, src %d, mni %d (MCC %d, MNC %d), msg-type %d \n",
+			printf("  REPGW %d, Fill %d, Frag %d, num %d, FN cnt %d, dst-type %d, dst-addr %d, src-type %d, src %d, mni %d (MCC %d, MNC %d), msg-type %d (%s) \n",
 				pdu_dmac_sync->repgw_address, pdu_dmac_sync->fillbit_indication, pdu_dmac_sync->fragmentation_flag, pdu_dmac_sync->number_of_sch_f_slots, 
 				pdu_dmac_sync->frame_countdown, pdu_dmac_sync->dest_address_type, pdu_dmac_sync->dest_address, pdu_dmac_sync->src_address_type, 
-				pdu_dmac_sync->src_address, pdu_dmac_sync->mni, mcc, mnc, pdu_dmac_sync->message_type);
+				pdu_dmac_sync->src_address, pdu_dmac_sync->mni, mcc, mnc, pdu_dmac_sync->message_type, tetra_get_dmo_message_type_name(pdu_dmac_sync->message_type));
 
 
 		} else {
@@ -1017,6 +1023,37 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 
 			// rx_dmv_unitdata_req(NULL, tms);
 
+		// repeat DM-MASTER DM-SDS DATA request
+		} else if (pdu_dmac_sync->repgw_address==my_repaddr && pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->communication_type == 1  && pdu_dmac_sync->frame_countdown > 0 && (pdu_dmac_sync->message_type == DM_SDS_DATA || pdu_dmac_sync->message_type == DM_SDS_UDATA) && pdu_dmac_sync->processed==false) {
+			uint8_t master_fcountdown = pdu_dmac_sync->frame_countdown;
+			uint8_t out_fn = (pdu_dmac_sync->frame_number+master_fcountdown+1) % 18;  // motoway fcn+1, spec fcn
+			uint8_t out_tn = 1;
+			tms->cur_burst.is_traffic = 0;
+			tms->mode_of_operation = DM_MAC_MODE_SIGNALLING;
+
+			pdu_dmac_sync->processed = true;
+			printf("## DM-SDS (U)DATA - we are gonna repeat - out starting at slave link FN: %d\n", out_fn);
+
+			for (int fn=0; fn<(DN232+1); fn++) { 
+				for (int tn=1; tn<5; tn++) {
+					send_dmac_sync_burst(pdu_dmac_sync, DM_LINK_SLAVE, out_fn+fn, tn, (DN232-fn), tms);
+					tms->channel_state = DM_CHANNEL_S_DMREP_ACTIVE_OCCUPIED;
+				}
+			}
+
+		} else if (pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->frame_countdown == 0 && (pdu_dmac_sync->message_type == DM_SDS_DATA || pdu_dmac_sync->message_type == DM_SDS_UDATA) && pdu_dmac_sync->processed==true) {
+			pdu_dmac_sync->processed = false;
+			printf("DM-SDS (U)DATA processed flag cleared!\n");
+
+		} else if (pdu_dmac_sync->sync_pdu_type == 0 && (pdu_dmac_sync->message_type == DM_SDS_DATA || pdu_dmac_sync->message_type == DM_SDS_UDATA) && pdu_dmac_sync->processed==true) {
+			printf("ignoring the repetitive DM-SDS (U)DATA from DM-MASTER\n");
+
+		// DMAC-SYNC DM-SDS OCCUPIED
+		} else if (tms->channel_state == DM_CHANNEL_S_DMREP_ACTIVE_OCCUPIED && pdu_dmac_sync->sync_pdu_type == 0 && pdu_dmac_sync->message_type == DM_SDS_OCCUPIED)  {
+			// repeat DMAC-SYNC burst
+			tms->channel_state_last_chg = 0; // reset counter for keepalive
+			send_dmac_sync_burst(pdu_dmac_sync, DM_LINK_SLAVE, pdu_dmac_sync->frame_number, pdu_dmac_sync->slot_number, 0, tms);
+
 		}
 
 
@@ -1040,6 +1077,35 @@ static void rx_dmo_signalling(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_s
 	}
 
 }
+
+// Send SCH/F DNB burst
+void rx_dmo_signalling_data_retransmit(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_state *tms)
+{	
+	struct msgb *schmsg = dmvp->oph.msg;
+
+	struct tetra_dmvsap_prim *tdp;
+	tdp = dmvsap_prim_alloc(PRIM_DMV_UNITDATA, PRIM_OP_REQUEST);
+	struct msgb *msg = tdp->oph.msg;
+	struct dmv_unitdata_param *d_unitdata_param = &tdp->u.unitdata;
+
+	d_unitdata_param->colour_code = pdu_dmac_sync->dm_colour_code;
+
+	struct tetra_tdma_time *time = &d_unitdata_param->tdma_time;
+	struct timing_slot *slot = tms->slot;
+	time->fn = slot->fn;
+	time->tn = slot->tn;
+	time->link = DM_LINK_SLAVE;
+
+	printf(" SCH/F - type1: %s\n", osmo_ubit_dump(schmsg->l1h, schmsg->data_len));
+	d_unitdata_param->lchan = TETRA_LC_SCH_F;
+
+	msg->l1h = msgb_put(msg, schmsg->data_len);
+	memcpy(msg->l1h, schmsg->l1h, schmsg->data_len);
+
+	rx_dmv_unitdata_req(tdp, tms);
+
+}
+
 
 void rx_dmo_traffic(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_state *tms)
 {
@@ -1125,6 +1191,10 @@ static int rx_dmv_unitdata_ind(struct tetra_dmvsap_prim *dmvp, struct tetra_mac_
 	case TETRA_LC_BNCH:
 	case TETRA_LC_UNKNOWN:
 	case TETRA_LC_SCH_F:
+		if (tms->mode_of_operation == DM_MAC_MODE_SIGNALLING) {
+			// repeat it
+			rx_dmo_signalling_data_retransmit(dmvp, tms);
+		}
 		switch (pdu_type) {
 		case TETRA_PDU_T_DMAC_DATA:
 			rx_dmo_dmac_data(dmvp, tms);
